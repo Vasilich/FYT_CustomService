@@ -35,6 +35,16 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    applicationVariants.all {
+        if (buildType.name == "debug") {
+            outputs.all {
+                @Suppress("UNCHECKED_CAST")
+                (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                    "FYTCustomService.apk"
+            }
+        }
+    }
 }
 
 dependencies {

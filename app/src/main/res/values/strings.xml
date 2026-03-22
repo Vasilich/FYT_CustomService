@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">FYT custom service</string>
+    <string name="settings_title">Service settings</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="status_running">Status: running</string>
+    <string name="status_stopped">Status: stopped</string>
+    <string name="required_access_title">Required setup for FYT</string>
+    <string name="open_setup">Open setup</string>
+    <string name="missing_notification_access">- Enable Notification access for this app</string>
+    <string name="missing_usage_access">- Enable Usage access for this app</string>
+</resources>

@@ -1,0 +1,15 @@
+.gradle/
+.gradle-user-home/
+build/
+*/build/
+
+local.properties
+.idea/
+*.iml
+
+captures/
+*.apk
+*.aab
+
+*.log
+*.tmp

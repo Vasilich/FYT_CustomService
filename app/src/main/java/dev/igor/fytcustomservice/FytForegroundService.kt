@@ -21,14 +21,17 @@ class FytForegroundService : Service() {
     private var lastAccOffHandledAtMs = 0L
     private var lastAccOnHandledAtMs = 0L
     private var pendingAccOnRunnable: Runnable? = null
+    private val pendingStartupRunnables = mutableListOf<Runnable>()
 
     override fun onCreate() {
         super.onCreate()
+        WatchdogScheduler.ensureScheduled(this)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Service active"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        WatchdogScheduler.ensureScheduled(this)
         when (intent?.action) {
             ACTION_STOP -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -54,6 +57,7 @@ class FytForegroundService : Service() {
     override fun onDestroy() {
         pendingAccOnRunnable?.let(handler::removeCallbacks)
         pendingAccOnRunnable = null
+        clearPendingStartupRunnables()
         super.onDestroy()
     }
 
@@ -114,6 +118,8 @@ class FytForegroundService : Service() {
             updateStatus("ACCON: launched ${saved.packageName}, waiting ${delayMs}ms")
 
             pendingAccOnRunnable?.let(handler::removeCallbacks)
+            pendingAccOnRunnable = null
+            clearPendingStartupRunnables()
             val run = Runnable {
                 withShortWakeLock {
                     if (saved.wasPlaying) {
@@ -121,22 +127,73 @@ class FytForegroundService : Service() {
                         Log.i(TAG, "ACCON PLAY sent to ${saved.packageName}")
                     }
 
-                    if (!previousForeground.isNullOrBlank() && previousForeground != saved.packageName) {
-                        val restored = ForegroundAppHelper.launchPackage(this, previousForeground)
-                        Log.i(
-                            TAG,
-                            "ACCON restore foreground package=$previousForeground result=$restored"
-                        )
-                    }
+                    runConfiguredStartupTargets {
+                        if (!previousForeground.isNullOrBlank() && previousForeground != saved.packageName) {
+                            val restored = ForegroundAppHelper.launchPackage(this, previousForeground)
+                            Log.i(
+                                TAG,
+                                "ACCON restore foreground package=$previousForeground result=$restored"
+                            )
+                        }
 
-                    MediaStateStore.clearAccOffState(this)
-                    updateStatus("ACCON done: ${saved.packageName}")
-                    pendingAccOnRunnable = null
+                        MediaStateStore.clearAccOffState(this)
+                        updateStatus("ACCON done: ${saved.packageName}")
+                        pendingAccOnRunnable = null
+                    }
                 }
             }
             pendingAccOnRunnable = run
             handler.postDelayed(run, delayMs.toLong())
         }
+    }
+
+    private fun runConfiguredStartupTargets(onDone: () -> Unit) {
+        val targets = AccOnStartupStore.load(this)
+        if (targets.isEmpty()) {
+            onDone()
+            return
+        }
+
+        fun scheduleNext(index: Int) {
+            if (index >= targets.size) {
+                onDone()
+                return
+            }
+
+            val target = targets[index]
+            val alreadyRunning = StartupTargetLauncher.isPackageLikelyRunning(this, target.packageName)
+            if (alreadyRunning) {
+                Log.i(
+                    TAG,
+                    "ACCON startup target skipped (already running): ${target.packageName}/${target.activityName}"
+                )
+                scheduleNext(index + 1)
+                return
+            }
+
+            val launched = StartupTargetLauncher.launchActivity(this, target)
+            Log.i(
+                TAG,
+                "ACCON startup target launch package=${target.packageName} activity=${target.activityName} " +
+                    "pause=${target.pauseAfterMs}ms result=$launched"
+            )
+
+            val next = object : Runnable {
+                override fun run() {
+                    pendingStartupRunnables.remove(this)
+                    scheduleNext(index + 1)
+                }
+            }
+            pendingStartupRunnables += next
+            handler.postDelayed(next, target.pauseAfterMs.toLong())
+        }
+
+        scheduleNext(0)
+    }
+
+    private fun clearPendingStartupRunnables() {
+        pendingStartupRunnables.forEach(handler::removeCallbacks)
+        pendingStartupRunnables.clear()
     }
 
     private fun isDuplicateAccEvent(isAccOn: Boolean): Boolean {
@@ -182,7 +239,9 @@ class FytForegroundService : Service() {
     }
 
     private fun buildNotification(statusText: String): Notification {
-        val openAppIntent = Intent(this, MainActivity::class.java)
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,

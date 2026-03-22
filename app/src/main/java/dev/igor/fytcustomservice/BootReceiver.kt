@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        WatchdogScheduler.ensureScheduled(context)
         if (!ServiceSettings.autoStartOnBoot(context)) return
 
         val shouldStart = intent.action == Intent.ACTION_BOOT_COMPLETED ||

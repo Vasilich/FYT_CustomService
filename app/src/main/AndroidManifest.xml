@@ -24,14 +24,38 @@
         android:theme="@style/Theme.FytCustomService">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".StartupActivity"
             android:exported="true"
-            android:screenOrientation="landscape">
+            android:excludeFromRecents="true"
+            android:finishOnTaskLaunch="true"
+            android:noHistory="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.FytCustomService.NoDisplay">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="landscape">
+        </activity>
+
+        <activity-alias
+            android:name=".SettingsLauncherAlias"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name_settings"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name=".FytForegroundService"

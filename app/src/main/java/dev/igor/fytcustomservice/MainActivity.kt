@@ -15,6 +15,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -58,7 +59,7 @@ class MainActivity : AppCompatActivity() {
         btnSettings.setOnClickListener { showSettingsDialog() }
         btnAccOnTargets.setOnClickListener {
             if (ensureRequiredAccessesForConfiguration()) {
-                showAccOnTargetsDialog()
+                showAccOnTargetsEditorDialog()
             }
         }
 
@@ -105,99 +106,153 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showAccOnTargetsDialog() {
-        val targets = AccOnStartupStore.load(this)
-        val body = if (targets.isEmpty()) {
-            "No startup targets configured."
-        } else {
-            targets.mapIndexed { idx, target ->
-                "${idx + 1}. ${target.packageName}\n   " +
-                    "${target.activityName ?: "[default launcher activity]"} (${target.pauseAfterMs}ms)"
-            }.joinToString(separator = "\n\n")
+    private fun showAccOnTargetsEditorDialog() {
+        val workingTargets = AccOnStartupStore.load(this).toMutableList()
+        val view = layoutInflater.inflate(R.layout.dialog_acc_on_targets_editor, null)
+        val listView = view.findViewById<ListView>(R.id.listTargets)
+        val btnAdd = view.findViewById<Button>(R.id.btnAddTarget)
+        val btnEdit = view.findViewById<Button>(R.id.btnEditTarget)
+        val btnDelete = view.findViewById<Button>(R.id.btnDeleteTarget)
+        val btnMoveUp = view.findViewById<Button>(R.id.btnMoveUpTarget)
+        val btnMoveDown = view.findViewById<Button>(R.id.btnMoveDownTarget)
+
+        val adapter = TargetManageAdapter(this, workingTargets)
+        listView.adapter = adapter
+        listView.choiceMode = ListView.CHOICE_MODE_SINGLE
+
+        var selectedIndex = if (workingTargets.isNotEmpty()) 0 else -1
+
+        fun selectIndex(index: Int) {
+            selectedIndex = if (workingTargets.isEmpty()) {
+                -1
+            } else {
+                index.coerceIn(0, workingTargets.lastIndex)
+            }
+            listView.clearChoices()
+            if (selectedIndex >= 0) {
+                listView.setItemChecked(selectedIndex, true)
+                listView.setSelection(selectedIndex)
+            }
         }
 
-        val builder = AlertDialog.Builder(this)
-            .setTitle("ACC ON startup targets")
-            .setMessage(body)
-            .setPositiveButton("Add target") { _, _ ->
-                showAppPickerForTarget()
-            }
-            .setNegativeButton("Close", null)
+        fun refreshButtons() {
+            val hasSelection = selectedIndex in workingTargets.indices
+            btnEdit.isEnabled = hasSelection
+            btnDelete.isEnabled = hasSelection
+            btnMoveUp.isEnabled = hasSelection && selectedIndex > 0
+            btnMoveDown.isEnabled = hasSelection && selectedIndex < workingTargets.lastIndex
+        }
 
-        if (targets.isNotEmpty()) {
-            builder.setNeutralButton("Manage targets") { _, _ ->
-                showManageTargetsDialog(targets)
+        fun refreshUi() {
+            adapter.notifyDataSetChanged()
+            if (workingTargets.isNotEmpty() && selectedIndex < 0) {
+                selectedIndex = 0
+            }
+            selectIndex(selectedIndex)
+            refreshButtons()
+        }
+
+        listView.setOnItemClickListener { _, _, position, _ ->
+            selectedIndex = position
+            refreshButtons()
+        }
+
+        btnAdd.setOnClickListener {
+            runTargetWizard(existing = null) { created ->
+                workingTargets.add(created)
+                selectedIndex = workingTargets.lastIndex
+                refreshUi()
             }
         }
 
-        builder.show()
-    }
-
-    private fun showManageTargetsDialog(targets: List<AccOnStartupTarget>) {
-        val adapter = TargetManageAdapter(this, targets)
-        AlertDialog.Builder(this)
-            .setTitle("Manage startup targets")
-            .setAdapter(adapter) { _, which ->
-                val target = targets[which]
-                showTargetActionsDialog(targets = targets, index = which, target = target)
+        btnEdit.setOnClickListener {
+            val index = selectedIndex
+            if (index !in workingTargets.indices) return@setOnClickListener
+            runTargetWizard(existing = workingTargets[index]) { updated ->
+                workingTargets[index] = updated
+                selectedIndex = index
+                refreshUi()
             }
-            .setPositiveButton("Add target") { _, _ -> showAppPickerForTarget() }
-            .setNeutralButton("Clear all targets") { _, _ ->
-                AccOnStartupStore.save(this, emptyList())
-                showAccOnTargetsDialog()
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    private fun showTargetActionsDialog(
-        targets: List<AccOnStartupTarget>,
-        index: Int,
-        target: AccOnStartupTarget
-    ) {
-        val options = buildList {
-            if (index > 0) add("Move up")
-            if (index < targets.lastIndex) add("Move down")
-            add("Remove")
         }
 
-        AlertDialog.Builder(this)
-            .setTitle(
-                "Target actions\n${target.packageName}\n" +
-                    "${target.activityName ?: "[default launcher activity]"}"
-            )
-            .setItems(options.toTypedArray()) { _, which ->
-                when (options[which]) {
-                    "Move up" -> {
-                        val updated = targets.toMutableList().apply {
-                            val moved = removeAt(index)
-                            add(index - 1, moved)
-                        }
-                        AccOnStartupStore.save(this, updated)
-                        showManageTargetsDialog(updated)
-                    }
-
-                    "Move down" -> {
-                        val updated = targets.toMutableList().apply {
-                            val moved = removeAt(index)
-                            add(index + 1, moved)
-                        }
-                        AccOnStartupStore.save(this, updated)
-                        showManageTargetsDialog(updated)
-                    }
-
-                    "Remove" -> {
-                        val updated = targets.toMutableList().apply { removeAt(index) }
-                        AccOnStartupStore.save(this, updated)
-                        showAccOnTargetsDialog()
-                    }
+        btnDelete.setOnClickListener {
+            val index = selectedIndex
+            if (index !in workingTargets.indices) return@setOnClickListener
+            val target = workingTargets[index]
+            AlertDialog.Builder(this)
+                .setTitle("Delete target?")
+                .setMessage(
+                    "${target.packageName}\n" +
+                        "${target.activityName ?: "[default launcher activity]"}"
+                )
+                .setPositiveButton("Delete") { _, _ ->
+                    workingTargets.removeAt(index)
+                    selectedIndex = if (workingTargets.isEmpty()) -1 else (index - 1).coerceAtLeast(0)
+                    refreshUi()
                 }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+
+        btnMoveUp.setOnClickListener {
+            val index = selectedIndex
+            if (index !in workingTargets.indices || index == 0) return@setOnClickListener
+            val moved = workingTargets.removeAt(index)
+            workingTargets.add(index - 1, moved)
+            selectedIndex = index - 1
+            refreshUi()
+        }
+
+        btnMoveDown.setOnClickListener {
+            val index = selectedIndex
+            if (index !in workingTargets.indices || index >= workingTargets.lastIndex) {
+                return@setOnClickListener
             }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+            val moved = workingTargets.removeAt(index)
+            workingTargets.add(index + 1, moved)
+            selectedIndex = index + 1
+            refreshUi()
+        }
+
+        refreshUi()
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("ACC ON startup targets")
+            .setView(view)
+            .setPositiveButton("OK", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                AccOnStartupStore.save(this, workingTargets)
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
     }
 
-    private fun showAppPickerForTarget() {
+    private fun runTargetWizard(existing: AccOnStartupTarget?, onComplete: (AccOnStartupTarget) -> Unit) {
+        showAppPickerForTarget(existing?.packageName) { packageName ->
+            showActivityPickerForTarget(
+                selectedPackage = packageName,
+                currentActivityName = existing?.activityName
+            ) { activityName ->
+                showPauseDialogForTarget(
+                    packageName = packageName,
+                    activityName = activityName,
+                    initialPauseMs = existing?.pauseAfterMs ?: 1500,
+                    onComplete = onComplete
+                )
+            }
+        }
+    }
+
+    private fun showAppPickerForTarget(
+        preferredPackage: String?,
+        onPackageSelected: (String) -> Unit
+    ) {
         val apps = InstalledAppCatalog.queryLaunchableApps(this)
             .filter { it.packageName != packageName }
         if (apps.isEmpty()) {
@@ -205,71 +260,72 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        var checkedIndex = apps.indexOfFirst { it.packageName == preferredPackage }
+        if (checkedIndex < 0) checkedIndex = 0
+
         val labels = apps.map { "${it.displayName} (${it.packageName})" }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("Select app")
-            .setItems(labels) { _, which ->
-                showActivityPickerForTarget(apps[which].packageName)
+            .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
+                onPackageSelected(apps[which].packageName)
+                dialog.dismiss()
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
-    private fun showActivityPickerForTarget(selectedPackage: String) {
+    private fun showActivityPickerForTarget(
+        selectedPackage: String,
+        currentActivityName: String?,
+        onActivitySelected: (String?) -> Unit
+    ) {
         val activities = InstalledAppCatalog.queryExportedActivities(this, selectedPackage)
         val labels = buildList {
             add("Default launcher activity")
             addAll(activities.map { "${it.displayName}\n${it.activityName}" })
         }.toTypedArray()
+
+        var checkedIndex = 0
+        if (!currentActivityName.isNullOrBlank()) {
+            val found = activities.indexOfFirst { it.activityName == currentActivityName }
+            if (found >= 0) checkedIndex = found + 1
+        }
+
         AlertDialog.Builder(this)
             .setTitle("Select activity")
-            .setItems(labels) { _, which ->
-                if (which == 0) {
-                    showPauseDialogForTarget(
-                        packageName = selectedPackage,
-                        activityName = null
-                    )
-                } else {
-                    val selected = activities[which - 1]
-                    showPauseDialogForTarget(
-                        packageName = selected.packageName,
-                        activityName = selected.activityName
-                    )
-                }
+            .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
+                val activityName = if (which == 0) null else activities[which - 1].activityName
+                onActivitySelected(activityName)
+                dialog.dismiss()
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
-    private fun showPauseDialogForTarget(packageName: String, activityName: String?) {
+    private fun showPauseDialogForTarget(
+        packageName: String,
+        activityName: String?,
+        initialPauseMs: Int,
+        onComplete: (AccOnStartupTarget) -> Unit
+    ) {
         val pauseInput = EditText(this).apply {
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            setText("1500")
+            setText(initialPauseMs.toString())
             hint = "Pause after start (ms)"
         }
 
         AlertDialog.Builder(this)
             .setTitle("Pause after start (ms)")
             .setView(pauseInput)
-            .setPositiveButton(R.string.save) { _, _ ->
+            .setPositiveButton("OK") { _, _ ->
                 val pauseMs = AccOnStartupStore.parsePauseMs(pauseInput.text?.toString().orEmpty())
-                val targets = AccOnStartupStore.load(this).toMutableList()
-                val existingIndex = targets.indexOfFirst {
-                    it.packageName == packageName &&
-                        normalizeActivityName(it.activityName) == normalizeActivityName(activityName)
-                }
-                val target = AccOnStartupTarget(
-                    packageName = packageName,
-                    activityName = activityName,
-                    pauseAfterMs = pauseMs
+                onComplete(
+                    AccOnStartupTarget(
+                        packageName = packageName,
+                        activityName = activityName,
+                        pauseAfterMs = pauseMs
+                    )
                 )
-                if (existingIndex >= 0) {
-                    targets[existingIndex] = target
-                } else {
-                    targets += target
-                }
-                AccOnStartupStore.save(this, targets)
-                showAccOnTargetsDialog()
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -343,10 +399,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-    }
-
-    private fun normalizeActivityName(activityName: String?): String {
-        return activityName?.takeIf { it.isNotBlank() } ?: ""
     }
 
     private class TargetManageAdapter(

@@ -4,11 +4,17 @@ import android.Manifest
 import android.app.AlertDialog
 import android.app.AppOpsManager
 import android.content.Intent
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -110,29 +116,84 @@ class MainActivity : AppCompatActivity() {
             }.joinToString(separator = "\n\n")
         }
 
-        val options = buildList {
-            add("Add target")
-            if (targets.isNotEmpty()) {
-                add("Remove target")
-                add("Clear all targets")
+        val builder = AlertDialog.Builder(this)
+            .setTitle("ACC ON startup targets")
+            .setMessage(body)
+            .setPositiveButton("Add target") { _, _ ->
+                showAppPickerForTarget()
             }
-            add("Close")
+            .setNegativeButton("Close", null)
+
+        if (targets.isNotEmpty()) {
+            builder.setNeutralButton("Manage targets") { _, _ ->
+                showManageTargetsDialog(targets)
+            }
+        }
+
+        builder.show()
+    }
+
+    private fun showManageTargetsDialog(targets: List<AccOnStartupTarget>) {
+        val adapter = TargetManageAdapter(this, targets)
+        AlertDialog.Builder(this)
+            .setTitle("Manage startup targets")
+            .setAdapter(adapter) { _, which ->
+                val target = targets[which]
+                showTargetActionsDialog(targets = targets, index = which, target = target)
+            }
+            .setPositiveButton("Add target") { _, _ -> showAppPickerForTarget() }
+            .setNeutralButton("Clear all targets") { _, _ ->
+                AccOnStartupStore.save(this, emptyList())
+                showAccOnTargetsDialog()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun showTargetActionsDialog(
+        targets: List<AccOnStartupTarget>,
+        index: Int,
+        target: AccOnStartupTarget
+    ) {
+        val options = buildList {
+            if (index > 0) add("Move up")
+            if (index < targets.lastIndex) add("Move down")
+            add("Remove")
         }
 
         AlertDialog.Builder(this)
-            .setTitle("ACC ON startup targets")
-            .setMessage(body)
+            .setTitle(
+                "Target actions\n${target.packageName}\n" +
+                    "${target.activityName ?: "[default launcher activity]"}"
+            )
             .setItems(options.toTypedArray()) { _, which ->
                 when (options[which]) {
-                    "Add target" -> showAppPickerForTarget()
-                    "Remove target" -> showRemoveTargetDialog(targets)
-                    "Clear all targets" -> {
-                        AccOnStartupStore.save(this, emptyList())
+                    "Move up" -> {
+                        val updated = targets.toMutableList().apply {
+                            val moved = removeAt(index)
+                            add(index - 1, moved)
+                        }
+                        AccOnStartupStore.save(this, updated)
+                        showManageTargetsDialog(updated)
+                    }
+
+                    "Move down" -> {
+                        val updated = targets.toMutableList().apply {
+                            val moved = removeAt(index)
+                            add(index + 1, moved)
+                        }
+                        AccOnStartupStore.save(this, updated)
+                        showManageTargetsDialog(updated)
+                    }
+
+                    "Remove" -> {
+                        val updated = targets.toMutableList().apply { removeAt(index) }
+                        AccOnStartupStore.save(this, updated)
                         showAccOnTargetsDialog()
                     }
-                    "Close" -> Unit
                 }
             }
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
@@ -214,27 +275,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showRemoveTargetDialog(targets: List<AccOnStartupTarget>) {
-        if (targets.isEmpty()) {
-            showAccOnTargetsDialog()
-            return
-        }
-
-        val labels = targets.mapIndexed { idx, target ->
-            "${idx + 1}. ${target.packageName}\n${target.activityName ?: "[default launcher activity]"}"
-        }.toTypedArray()
-
-        AlertDialog.Builder(this)
-            .setTitle("Remove target")
-            .setItems(labels) { _, which ->
-                val updated = targets.toMutableList().apply { removeAt(which) }
-                AccOnStartupStore.save(this, updated)
-                showAccOnTargetsDialog()
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
     private fun ensureRequiredAccessesForConfiguration(): Boolean {
         requestNotificationPermissionIfNeeded()
         val ok = hasNotificationListenerAccess() && hasUsageAccess()
@@ -307,5 +347,43 @@ class MainActivity : AppCompatActivity() {
 
     private fun normalizeActivityName(activityName: String?): String {
         return activityName?.takeIf { it.isNotBlank() } ?: ""
+    }
+
+    private class TargetManageAdapter(
+        activity: MainActivity,
+        targets: List<AccOnStartupTarget>
+    ) : ArrayAdapter<AccOnStartupTarget>(activity, 0, targets) {
+        private val inflater = LayoutInflater.from(activity)
+        private val pm = activity.packageManager
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView ?: inflater.inflate(R.layout.item_manage_target, parent, false)
+            val target = getItem(position) ?: return view
+
+            val iconView = view.findViewById<ImageView>(R.id.iconApp)
+            val titleView = view.findViewById<TextView>(R.id.textAppTitle)
+            val subtitleView = view.findViewById<TextView>(R.id.textAppSubtitle)
+
+            val appLabel = runCatching {
+                val appInfo = pm.getApplicationInfo(target.packageName, 0)
+                pm.getApplicationLabel(appInfo).toString()
+            }.getOrDefault(target.packageName)
+
+            val icon = runCatching {
+                pm.getApplicationIcon(target.packageName)
+            }.getOrDefault(defaultIcon(iconView))
+
+            iconView.setImageDrawable(icon)
+            titleView.text = appLabel
+            subtitleView.text =
+                "${target.activityName ?: "[default launcher activity]"} (${target.pauseAfterMs}ms)"
+
+            return view
+        }
+
+        private fun defaultIcon(iconView: ImageView): Drawable {
+            return iconView.context.getDrawable(android.R.drawable.sym_def_app_icon)
+                ?: throw IllegalStateException("Default app icon missing")
+        }
     }
 }

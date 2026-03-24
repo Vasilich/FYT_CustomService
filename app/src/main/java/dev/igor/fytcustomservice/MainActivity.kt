@@ -25,6 +25,8 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var statusText: TextView
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* no-op */ }
@@ -34,7 +36,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         WatchdogScheduler.ensureScheduled(this)
 
-        val statusText = findViewById<TextView>(R.id.statusText)
+        statusText = findViewById(R.id.statusText)
         val btnStart = findViewById<Button>(R.id.btnStart)
         val btnStop = findViewById<Button>(R.id.btnStop)
         val btnSettings = findViewById<Button>(R.id.btnSettings)
@@ -74,6 +76,12 @@ class MainActivity : AppCompatActivity() {
 
         requestNotificationPermissionIfNeeded()
         promptRequiredAccessesIfNeeded()
+        refreshServiceStatusText()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshServiceStatusText()
     }
 
     private fun showSettingsDialog() {
@@ -399,6 +407,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun refreshServiceStatusText() {
+        statusText.text = if (ServiceRuntimeHelper.isForegroundServiceRunning(this)) {
+            getString(R.string.status_running)
+        } else {
+            getString(R.string.status_stopped)
+        }
     }
 
     private class TargetManageAdapter(

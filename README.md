@@ -18,11 +18,13 @@
   - Skip target if package is already running.
 - Provides a minimal GUI to:
   - Start/stop the service.
+  - Show service status (`running`/`stopped`) and last received ACCON/ACCOFF timestamps.
   - Change command action string.
   - Toggle auto-start on boot.
   - Set ACCON play delay in milliseconds (500-10000 ms).
   - Configure ACCON startup targets.
 - Schedules a watchdog worker (15-minute periodic check) to restart the service if killed.
+- Writes ACC event logs to public Documents folder (`Documents/FYTService/FYTCustomService-acc.log`).
 
 ## Intent contract
 Default action:
@@ -51,6 +53,8 @@ ACCOFF flow:
 2. Persist `packageName` + `wasPlaying` using synchronous commit.
 3. Send media code `PAUSE`.
 4. Debounce duplicate ACCOFF broadcasts (common on some firmware variants).
+5. Persist last-received ACCOFF timestamp.
+6. Append ACCOFF diagnostics to log file.
 
 ACCON flow:
 1. Load saved package/state from ACCOFF.
@@ -61,6 +65,8 @@ ACCON flow:
 6. Execute configured ACCON startup targets in order (with per-target pauses).
 7. Restore previous foreground app.
 8. Clear saved ACCOFF state after successful ACCON handling.
+9. Persist last-received ACCON timestamp.
+10. Append ACCON diagnostics to log file.
 
 ## ACCON startup targets
 Configured from `ACC ON startup targets` button in app settings screen.
@@ -71,6 +77,15 @@ Each target stores:
 - Pause after start (ms)
 
 Targets are persisted via `SharedPreferences` JSON and loaded automatically on ACCON.
+
+Editor behavior:
+- Single scrollable list (no secondary manage list).
+- Single-selection model.
+- Actions: Add / Edit / Delete / Move up / Move down.
+- Delete requires confirmation.
+- Add/Edit flow:
+  1. Select app.
+  2. In one combined dialog choose activity (`Default launcher activity` preselected) and delay.
 
 ## Important Android 13 / FYT notes
 A regular third-party app **cannot guarantee absolutely never stopping** on stock Android 13. This project uses the strongest non-root pattern available to apps:
@@ -105,7 +120,22 @@ Also required in system settings for full ACC logic:
 
 Potentially required by device firmware:
 - Vendor-specific "autostart" whitelist.
-- Vendor-specific keep-alive whitelist / startup manager exception.\n
+- Vendor-specific keep-alive whitelist / startup manager exception.
+
+## ACC Event Logging
+Log file location:
+- `Documents/FYTService/FYTCustomService-acc.log`
+
+Each line starts with timestamp format:
+- `yyyy-MM-dd HH:mm:ss.SSS`
+
+Logged details include:
+- ACCON/ACCOFF receive events and duplicate-ignore events.
+- ACCOFF active player detection and pause action.
+- ACCON saved player launch attempt/result.
+- ACCON PLAY sent/skipped with reason.
+- Startup target actions per item: launched or skipped with reason (for example `already_running`).
+- Previous foreground restore attempt/result.
 ## Where to add your code
 Implement custom command logic in:
 - `app/src/main/java/dev/igor/fytcustomservice/FytForegroundService.kt`

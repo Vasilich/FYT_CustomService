@@ -143,6 +143,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 index.coerceIn(0, workingTargets.lastIndex)
             }
+            adapter.setSelectedIndex(selectedIndex)
             listView.clearChoices()
             if (selectedIndex >= 0) {
                 listView.setItemChecked(selectedIndex, true)
@@ -422,6 +423,7 @@ class MainActivity : AppCompatActivity() {
     ) : ArrayAdapter<AccOnStartupTarget>(activity, 0, targets) {
         private val inflater = LayoutInflater.from(activity)
         private val pm = activity.packageManager
+        private var selectedIndex: Int = -1
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val view = convertView ?: inflater.inflate(R.layout.item_manage_target, parent, false)
@@ -444,8 +446,16 @@ class MainActivity : AppCompatActivity() {
             titleView.text = appLabel
             subtitleView.text =
                 "${target.activityName ?: "[default launcher activity]"} (${target.pauseAfterMs}ms)"
+            val selected = position == selectedIndex
+            view.isActivated = selected
+            view.isSelected = selected
 
             return view
+        }
+
+        fun setSelectedIndex(index: Int) {
+            selectedIndex = index
+            notifyDataSetChanged()
         }
 
         private fun defaultIcon(iconView: ImageView): Drawable {

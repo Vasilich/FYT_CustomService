@@ -62,8 +62,12 @@ class FytForegroundService : Service() {
     }
 
     private fun handleAccOff() {
+        AccEventStateStore.setLastAccOffTimestamp(this)
+        AccEventLog.append(this, "RECEIVED com.fyt.boot.ACCOFF")
+
         if (isDuplicateAccEvent(isAccOn = false)) {
             Log.i(TAG, "ACCOFF ignored as duplicate signal")
+            AccEventLog.append(this, "ACCOFF ignored: duplicate signal")
             return
         }
 
@@ -71,6 +75,7 @@ class FytForegroundService : Service() {
             val snapshot = MediaControlHelper.captureCurrentMediaSnapshot(this)
             if (snapshot == null) {
                 updateStatus("ACCOFF: no active media session")
+                AccEventLog.append(this, "ACCOFF no active media session detected")
                 return@withShortWakeLock
             }
 
@@ -81,6 +86,11 @@ class FytForegroundService : Service() {
             )
 
             MediaControlHelper.sendPause(this, snapshot.packageName)
+            AccEventLog.append(
+                this,
+                "ACCOFF activePlayer=${snapshot.packageName} wasPlaying=${snapshot.wasPlaying} " +
+                    "persisted=$persisted pauseSent=true"
+            )
 
             Log.i(
                 TAG,
@@ -91,8 +101,12 @@ class FytForegroundService : Service() {
     }
 
     private fun handleAccOn() {
+        AccEventStateStore.setLastAccOnTimestamp(this)
+        AccEventLog.append(this, "RECEIVED com.fyt.boot.ACCON")
+
         if (isDuplicateAccEvent(isAccOn = true)) {
             Log.i(TAG, "ACCON ignored as duplicate signal")
+            AccEventLog.append(this, "ACCON ignored: duplicate signal")
             return
         }
 
@@ -100,6 +114,7 @@ class FytForegroundService : Service() {
             val saved = MediaStateStore.loadAccOffState(this)
             if (saved == null) {
                 updateStatus("ACCON: nothing saved from ACCOFF")
+                AccEventLog.append(this, "ACCON no saved ACCOFF player state")
                 return@withShortWakeLock
             }
 
@@ -108,6 +123,11 @@ class FytForegroundService : Service() {
                 excludePackage = packageName
             )
             val launched = ForegroundAppHelper.launchPackage(this, saved.packageName)
+            AccEventLog.append(
+                this,
+                "ACCON savedPlayer=${saved.packageName} wasPlaying=${saved.wasPlaying} " +
+                    "launchResult=$launched"
+            )
             if (!launched) {
                 updateStatus("ACCON: failed to launch ${saved.packageName}")
                 Log.w(TAG, "ACCON failed to launch ${saved.packageName}")
@@ -125,6 +145,12 @@ class FytForegroundService : Service() {
                     if (saved.wasPlaying) {
                         MediaControlHelper.sendPlay(this, saved.packageName)
                         Log.i(TAG, "ACCON PLAY sent to ${saved.packageName}")
+                        AccEventLog.append(this, "ACCON sent PLAY to saved player ${saved.packageName}")
+                    } else {
+                        AccEventLog.append(
+                            this,
+                            "ACCON skipped PLAY for saved player ${saved.packageName} because wasPlaying=false"
+                        )
                     }
 
                     runConfiguredStartupTargets {
@@ -134,9 +160,19 @@ class FytForegroundService : Service() {
                                 TAG,
                                 "ACCON restore foreground package=$previousForeground result=$restored"
                             )
+                            AccEventLog.append(
+                                this,
+                                "ACCON restore previousForeground=$previousForeground result=$restored"
+                            )
+                        } else {
+                            AccEventLog.append(
+                                this,
+                                "ACCON restore previousForeground skipped (none or same as saved player)"
+                            )
                         }
 
                         MediaStateStore.clearAccOffState(this)
+                        AccEventLog.append(this, "ACCON cleared saved ACCOFF player state")
                         updateStatus("ACCON done: ${saved.packageName}")
                         pendingAccOnRunnable = null
                     }
@@ -150,12 +186,15 @@ class FytForegroundService : Service() {
     private fun runConfiguredStartupTargets(onDone: () -> Unit) {
         val targets = AccOnStartupStore.load(this)
         if (targets.isEmpty()) {
+            AccEventLog.append(this, "ACCON startup targets: none configured")
             onDone()
             return
         }
+        AccEventLog.append(this, "ACCON startup targets count=${targets.size}")
 
         fun scheduleNext(index: Int) {
             if (index >= targets.size) {
+                AccEventLog.append(this, "ACCON startup targets completed")
                 onDone()
                 return
             }
@@ -167,6 +206,11 @@ class FytForegroundService : Service() {
                     TAG,
                     "ACCON startup target skipped (already running): ${target.packageName}/${target.activityName}"
                 )
+                AccEventLog.append(
+                    this,
+                    "ACCON target[$index] skipped package=${target.packageName} activity=${target.activityName ?: "[default]"} " +
+                        "reason=already_running"
+                )
                 scheduleNext(index + 1)
                 return
             }
@@ -175,6 +219,11 @@ class FytForegroundService : Service() {
             Log.i(
                 TAG,
                 "ACCON startup target launch package=${target.packageName} activity=${target.activityName} " +
+                    "pause=${target.pauseAfterMs}ms result=$launched"
+            )
+            AccEventLog.append(
+                this,
+                "ACCON target[$index] launch package=${target.packageName} activity=${target.activityName ?: "[default]"} " +
                     "pause=${target.pauseAfterMs}ms result=$launched"
             )
 

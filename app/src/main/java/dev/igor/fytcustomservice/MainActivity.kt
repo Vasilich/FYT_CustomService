@@ -16,6 +16,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ListView
+import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -26,6 +27,8 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
+    private lateinit var lastAccOnText: TextView
+    private lateinit var lastAccOffText: TextView
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -37,6 +40,8 @@ class MainActivity : AppCompatActivity() {
         WatchdogScheduler.ensureScheduled(this)
 
         statusText = findViewById(R.id.statusText)
+        lastAccOnText = findViewById(R.id.lastAccOnText)
+        lastAccOffText = findViewById(R.id.lastAccOffText)
         val btnStart = findViewById<Button>(R.id.btnStart)
         val btnStop = findViewById<Button>(R.id.btnStop)
         val btnSettings = findViewById<Button>(R.id.btnSettings)
@@ -77,11 +82,13 @@ class MainActivity : AppCompatActivity() {
         requestNotificationPermissionIfNeeded()
         promptRequiredAccessesIfNeeded()
         refreshServiceStatusText()
+        refreshAccEventTimestamps()
     }
 
     override fun onResume() {
         super.onResume()
         refreshServiceStatusText()
+        refreshAccEventTimestamps()
     }
 
     private fun showSettingsDialog() {
@@ -243,15 +250,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun runTargetWizard(existing: AccOnStartupTarget?, onComplete: (AccOnStartupTarget) -> Unit) {
         showAppPickerForTarget(existing?.packageName) { packageName ->
-            showActivityPickerForTarget(
+            showActivityAndDelayDialog(
                 selectedPackage = packageName,
-                currentActivityName = existing?.activityName
-            ) { activityName ->
-                showPauseDialogForTarget(
-                    packageName = packageName,
-                    activityName = activityName,
-                    initialPauseMs = existing?.pauseAfterMs ?: 1500,
-                    onComplete = onComplete
+                currentPauseMs = existing?.pauseAfterMs ?: 1500
+            ) { activityName, pauseMs ->
+                onComplete(
+                    AccOnStartupTarget(
+                        packageName = packageName,
+                        activityName = activityName,
+                        pauseAfterMs = pauseMs
+                    )
                 )
             }
         }
@@ -282,58 +290,42 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showActivityPickerForTarget(
+    private fun showActivityAndDelayDialog(
         selectedPackage: String,
-        currentActivityName: String?,
-        onActivitySelected: (String?) -> Unit
+        currentPauseMs: Int,
+        onComplete: (String?, Int) -> Unit
     ) {
         val activities = InstalledAppCatalog.queryExportedActivities(this, selectedPackage)
-        val labels = buildList {
+        val options = buildList {
             add("Default launcher activity")
             addAll(activities.map { "${it.displayName}\n${it.activityName}" })
-        }.toTypedArray()
-
-        var checkedIndex = 0
-        if (!currentActivityName.isNullOrBlank()) {
-            val found = activities.indexOfFirst { it.activityName == currentActivityName }
-            if (found >= 0) checkedIndex = found + 1
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("Select activity")
-            .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
-                val activityName = if (which == 0) null else activities[which - 1].activityName
-                onActivitySelected(activityName)
-                dialog.dismiss()
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
+        val selectedIndex = 0
 
-    private fun showPauseDialogForTarget(
-        packageName: String,
-        activityName: String?,
-        initialPauseMs: Int,
-        onComplete: (AccOnStartupTarget) -> Unit
-    ) {
-        val pauseInput = EditText(this).apply {
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            setText(initialPauseMs.toString())
-            hint = "Pause after start (ms)"
-        }
+        val view = layoutInflater.inflate(R.layout.dialog_target_activity_delay, null)
+        val pkgText = view.findViewById<TextView>(R.id.textTargetPackage)
+        val spinner = view.findViewById<Spinner>(R.id.spinnerActivity)
+        val delayEdit = view.findViewById<EditText>(R.id.editDelayMs)
+
+        pkgText.text = selectedPackage
+        spinner.adapter = android.widget.ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            options
+        )
+        spinner.setSelection(selectedIndex, false)
+
+        delayEdit.setText(currentPauseMs.toString())
 
         AlertDialog.Builder(this)
-            .setTitle("Pause after start (ms)")
-            .setView(pauseInput)
+            .setTitle("Activity and delay")
+            .setView(view)
             .setPositiveButton("OK") { _, _ ->
-                val pauseMs = AccOnStartupStore.parsePauseMs(pauseInput.text?.toString().orEmpty())
-                onComplete(
-                    AccOnStartupTarget(
-                        packageName = packageName,
-                        activityName = activityName,
-                        pauseAfterMs = pauseMs
-                    )
-                )
+                val index = spinner.selectedItemPosition.coerceAtLeast(0)
+                val activityName = if (index == 0) null else activities[index - 1].activityName
+                val pauseMs = AccOnStartupStore.parsePauseMs(delayEdit.text?.toString().orEmpty())
+                onComplete(activityName, pauseMs)
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -415,6 +407,13 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.status_stopped)
         }
+    }
+
+    private fun refreshAccEventTimestamps() {
+        val lastOn = AccEventTimeFormatter.formatForUi(AccEventStateStore.getLastAccOnTimestamp(this))
+        val lastOff = AccEventTimeFormatter.formatForUi(AccEventStateStore.getLastAccOffTimestamp(this))
+        lastAccOnText.text = getString(R.string.last_acc_on_format, lastOn)
+        lastAccOffText.text = getString(R.string.last_acc_off_format, lastOff)
     }
 
     private class TargetManageAdapter(

@@ -11,6 +11,9 @@
 - Handles FYT ACC events:
   - `com.fyt.boot.ACCOFF`: save current media app package + playing state, then send `PAUSE`.
   - `com.fyt.boot.ACCON`: launch saved player, wait configurable delay (default 2 seconds), send `PLAY`, then restore the app that was foreground before starting the player.
+- Also handles GLSX ACC aliases sent by some firmware builds:
+  - `com.glsx.boot.ACCOFF`
+  - `com.glsx.boot.ACCON`
 - Supports ACCON startup target list (persisted on disk):
   - Configure ordered app/activity starts.
   - Per-target pause after launch.
@@ -47,6 +50,8 @@ adb shell am broadcast \
 Input broadcasts expected from FYT system:
 - `com.fyt.boot.ACCON`
 - `com.fyt.boot.ACCOFF`
+- `com.glsx.boot.ACCON` (alias on some FYT/GLSX variants)
+- `com.glsx.boot.ACCOFF` (alias on some FYT/GLSX variants)
 
 ACCOFF flow:
 1. Read current active media session.
@@ -55,6 +60,10 @@ ACCOFF flow:
 4. Debounce duplicate ACCOFF broadcasts (common on some firmware variants).
 5. Persist last-received ACCOFF timestamp.
 6. Append ACCOFF diagnostics to log file.
+
+Receiver robustness notes:
+- `AccPowerReceiver` is marked `directBootAware=true` (can receive pre-unlock phase).
+- Receiver first tries `startForegroundService(...)` and falls back to `startService(...)` if needed by firmware/runtime constraints.
 
 ACCON flow:
 1. Load saved package/state from ACCOFF.

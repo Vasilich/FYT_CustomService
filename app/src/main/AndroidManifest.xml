@@ -84,11 +84,14 @@
 
         <receiver
             android:name=".AccPowerReceiver"
+            android:directBootAware="true"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="com.fyt.boot.ACCON" />
                 <action android:name="com.fyt.boot.ACCOFF" />
+                <action android:name="com.glsx.boot.ACCON" />
+                <action android:name="com.glsx.boot.ACCOFF" />
             </intent-filter>
         </receiver>
 

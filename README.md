@@ -145,6 +145,15 @@ Logged details include:
 - ACCON PLAY sent/skipped with reason.
 - Startup target actions per item: launched or skipped with reason (for example `already_running`).
 - Previous foreground restore attempt/result.
+
+## Changelog
+### 2026-03-26
+- ACC ON target editor buttons now use app-owned vector pictograms with theme-aware tint (visible in both dark and light themes).
+- App selection dialog now shows app icons next to app name and package.
+- Edit flow for existing ACC ON target now updates only activity and delay without forcing app re-selection.
+- Activity/delay dialog now shows selected app icon and app name.
+- Main screen now shows `Last saved player` and `Last started player` near ACC timestamp lines.
+
 ## Where to add your code
 Implement custom command logic in:
 - `app/src/main/java/dev/igor/fytcustomservice/FytForegroundService.kt`

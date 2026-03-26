@@ -10,6 +10,10 @@
     <string name="last_acc_off_never">Last ACC OFF: never</string>
     <string name="last_acc_on_format">Last ACC ON: %1$s</string>
     <string name="last_acc_off_format">Last ACC OFF: %1$s</string>
+    <string name="last_saved_player_none">Last saved player: none</string>
+    <string name="last_started_player_none">Last started player: none</string>
+    <string name="last_saved_player_format">Last saved player: %1$s</string>
+    <string name="last_started_player_format">Last started player: %1$s</string>
     <string name="required_access_title">Required setup for FYT</string>
     <string name="open_setup">Open setup</string>
     <string name="missing_notification_access">- Enable Notification access for this app</string>

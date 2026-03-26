@@ -15,6 +15,8 @@ object AccEventStateStore {
     private const val PREFS_NAME = "fyt_custom_service_acc_events"
     private const val KEY_LAST_ACC_ON_MS = "last_acc_on_ms"
     private const val KEY_LAST_ACC_OFF_MS = "last_acc_off_ms"
+    private const val KEY_LAST_SAVED_PLAYER = "last_saved_player"
+    private const val KEY_LAST_STARTED_PLAYER = "last_started_player"
 
     fun setLastAccOnTimestamp(context: Context, epochMs: Long = System.currentTimeMillis()) {
         prefs(context).edit().putLong(KEY_LAST_ACC_ON_MS, epochMs).apply()
@@ -32,6 +34,22 @@ object AccEventStateStore {
     fun getLastAccOffTimestamp(context: Context): Long? {
         val v = prefs(context).getLong(KEY_LAST_ACC_OFF_MS, 0L)
         return v.takeIf { it > 0L }
+    }
+
+    fun setLastSavedPlayer(context: Context, packageName: String?) {
+        prefs(context).edit().putString(KEY_LAST_SAVED_PLAYER, packageName).apply()
+    }
+
+    fun getLastSavedPlayer(context: Context): String? {
+        return prefs(context).getString(KEY_LAST_SAVED_PLAYER, null)
+    }
+
+    fun setLastStartedPlayer(context: Context, packageName: String?) {
+        prefs(context).edit().putString(KEY_LAST_STARTED_PLAYER, packageName).apply()
+    }
+
+    fun getLastStartedPlayer(context: Context): String? {
+        return prefs(context).getString(KEY_LAST_STARTED_PLAYER, null)
     }
 
     private fun prefs(context: Context) =

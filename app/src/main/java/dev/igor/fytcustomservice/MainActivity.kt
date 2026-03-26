@@ -29,6 +29,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var lastAccOnText: TextView
     private lateinit var lastAccOffText: TextView
+    private lateinit var lastSavedPlayerText: TextView
+    private lateinit var lastStartedPlayerText: TextView
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -42,6 +44,8 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         lastAccOnText = findViewById(R.id.lastAccOnText)
         lastAccOffText = findViewById(R.id.lastAccOffText)
+        lastSavedPlayerText = findViewById(R.id.lastSavedPlayerText)
+        lastStartedPlayerText = findViewById(R.id.lastStartedPlayerText)
         val btnStart = findViewById<Button>(R.id.btnStart)
         val btnStop = findViewById<Button>(R.id.btnStop)
         val btnSettings = findViewById<Button>(R.id.btnSettings)
@@ -250,10 +254,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runTargetWizard(existing: AccOnStartupTarget?, onComplete: (AccOnStartupTarget) -> Unit) {
-        showAppPickerForTarget(existing?.packageName) { packageName ->
+        if (existing != null) {
+            showActivityAndDelayDialog(
+                selectedPackage = existing.packageName,
+                currentPauseMs = existing.pauseAfterMs,
+                currentActivityName = existing.activityName
+            ) { activityName, pauseMs ->
+                onComplete(
+                    existing.copy(
+                        activityName = activityName,
+                        pauseAfterMs = pauseMs
+                    )
+                )
+            }
+            return
+        }
+
+        showAppPickerForTarget(null) { packageName ->
             showActivityAndDelayDialog(
                 selectedPackage = packageName,
-                currentPauseMs = existing?.pauseAfterMs ?: 1500
+                currentPauseMs = 1500,
+                currentActivityName = null
             ) { activityName, pauseMs ->
                 onComplete(
                     AccOnStartupTarget(
@@ -280,20 +301,33 @@ class MainActivity : AppCompatActivity() {
         var checkedIndex = apps.indexOfFirst { it.packageName == preferredPackage }
         if (checkedIndex < 0) checkedIndex = 0
 
-        val labels = apps.map { "${it.displayName} (${it.packageName})" }.toTypedArray()
-        AlertDialog.Builder(this)
+        val listView = ListView(this).apply {
+            choiceMode = ListView.CHOICE_MODE_SINGLE
+            dividerHeight = 4
+        }
+        val adapter = AppPickerAdapter(this, apps)
+        listView.adapter = adapter
+        listView.setItemChecked(checkedIndex, true)
+        listView.setSelection(checkedIndex)
+
+        val dialog = AlertDialog.Builder(this)
             .setTitle("Select app")
-            .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
-                onPackageSelected(apps[which].packageName)
-                dialog.dismiss()
-            }
+            .setView(listView)
             .setNegativeButton(R.string.cancel, null)
-            .show()
+            .create()
+
+        listView.setOnItemClickListener { _, _, position, _ ->
+            onPackageSelected(apps[position].packageName)
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     private fun showActivityAndDelayDialog(
         selectedPackage: String,
         currentPauseMs: Int,
+        currentActivityName: String?,
         onComplete: (String?, Int) -> Unit
     ) {
         val activities = InstalledAppCatalog.queryExportedActivities(this, selectedPackage)
@@ -302,13 +336,31 @@ class MainActivity : AppCompatActivity() {
             addAll(activities.map { "${it.displayName}\n${it.activityName}" })
         }
 
-        val selectedIndex = 0
+        val selectedIndex = currentActivityName?.let { existing ->
+            activities.indexOfFirst { it.activityName == existing }
+                .takeIf { it >= 0 }
+                ?.plus(1)
+        } ?: 0
 
         val view = layoutInflater.inflate(R.layout.dialog_target_activity_delay, null)
+        val appIcon = view.findViewById<ImageView>(R.id.iconTargetApp)
+        val appNameText = view.findViewById<TextView>(R.id.textTargetAppName)
         val pkgText = view.findViewById<TextView>(R.id.textTargetPackage)
         val spinner = view.findViewById<Spinner>(R.id.spinnerActivity)
         val delayEdit = view.findViewById<EditText>(R.id.editDelayMs)
 
+        val appName = runCatching {
+            val appInfo = packageManager.getApplicationInfo(selectedPackage, 0)
+            packageManager.getApplicationLabel(appInfo).toString()
+        }.getOrDefault(selectedPackage)
+        val icon = runCatching {
+            packageManager.getApplicationIcon(selectedPackage)
+        }.getOrDefault(
+            appIcon.context.getDrawable(android.R.drawable.sym_def_app_icon)
+        )
+
+        appIcon.setImageDrawable(icon)
+        appNameText.text = appName
         pkgText.text = selectedPackage
         spinner.adapter = android.widget.ArrayAdapter(
             this,
@@ -413,8 +465,12 @@ class MainActivity : AppCompatActivity() {
     private fun refreshAccEventTimestamps() {
         val lastOn = AccEventTimeFormatter.formatForUi(AccEventStateStore.getLastAccOnTimestamp(this))
         val lastOff = AccEventTimeFormatter.formatForUi(AccEventStateStore.getLastAccOffTimestamp(this))
+        val lastSavedPlayer = AccEventStateStore.getLastSavedPlayer(this).orEmpty().ifBlank { "-" }
+        val lastStartedPlayer = AccEventStateStore.getLastStartedPlayer(this).orEmpty().ifBlank { "-" }
         lastAccOnText.text = getString(R.string.last_acc_on_format, lastOn)
         lastAccOffText.text = getString(R.string.last_acc_off_format, lastOff)
+        lastSavedPlayerText.text = getString(R.string.last_saved_player_format, lastSavedPlayer)
+        lastStartedPlayerText.text = getString(R.string.last_started_player_format, lastStartedPlayer)
     }
 
     private class TargetManageAdapter(
@@ -461,6 +517,33 @@ class MainActivity : AppCompatActivity() {
         private fun defaultIcon(iconView: ImageView): Drawable {
             return iconView.context.getDrawable(android.R.drawable.sym_def_app_icon)
                 ?: throw IllegalStateException("Default app icon missing")
+        }
+    }
+
+    private class AppPickerAdapter(
+        activity: MainActivity,
+        apps: List<InstalledAppEntry>
+    ) : ArrayAdapter<InstalledAppEntry>(activity, 0, apps) {
+        private val inflater = LayoutInflater.from(activity)
+        private val pm = activity.packageManager
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView ?: inflater.inflate(R.layout.item_app_picker, parent, false)
+            val app = getItem(position) ?: return view
+
+            val iconView = view.findViewById<ImageView>(R.id.iconApp)
+            val titleView = view.findViewById<TextView>(R.id.textAppTitle)
+            val subtitleView = view.findViewById<TextView>(R.id.textAppSubtitle)
+
+            val icon = runCatching {
+                pm.getApplicationIcon(app.packageName)
+            }.getOrDefault(
+                iconView.context.getDrawable(android.R.drawable.sym_def_app_icon)
+            )
+            iconView.setImageDrawable(icon)
+            titleView.text = app.displayName
+            subtitleView.text = app.packageName
+            return view
         }
     }
 }

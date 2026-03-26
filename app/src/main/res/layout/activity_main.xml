@@ -49,13 +49,35 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <TextView
+        android:id="@+id/lastSavedPlayerText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/last_saved_player_none"
+        android:textColor="?android:textColorSecondary"
+        app:layout_constraintTop_toBottomOf="@id/lastAccOffText"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/lastStartedPlayerText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="@string/last_started_player_none"
+        android:textColor="?android:textColorSecondary"
+        app:layout_constraintTop_toBottomOf="@id/lastSavedPlayerText"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <Button
         android:id="@+id/btnStart"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
         android:text="Start service"
-        app:layout_constraintTop_toBottomOf="@id/lastAccOffText"
+        app:layout_constraintTop_toBottomOf="@id/lastStartedPlayerText"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 

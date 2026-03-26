@@ -84,6 +84,7 @@ class FytForegroundService : Service() {
                 packageName = snapshot.packageName,
                 wasPlaying = snapshot.wasPlaying
             )
+            AccEventStateStore.setLastSavedPlayer(this, snapshot.packageName)
 
             MediaControlHelper.sendPause(this, snapshot.packageName)
             AccEventLog.append(
@@ -133,6 +134,7 @@ class FytForegroundService : Service() {
                 Log.w(TAG, "ACCON failed to launch ${saved.packageName}")
                 return@withShortWakeLock
             }
+            AccEventStateStore.setLastStartedPlayer(this, saved.packageName)
 
             val delayMs = ServiceSettings.accOnPlayDelayMs(this)
             updateStatus("ACCON: launched ${saved.packageName}, waiting ${delayMs}ms")

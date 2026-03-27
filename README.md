@@ -147,6 +147,15 @@ Logged details include:
 - Previous foreground restore attempt/result.
 
 ## Changelog
+### 2026-03-27
+- Added runtime ACC receiver inside foreground service as an additional receive path for FYT/GLSX ACC broadcasts, with forwarding logs.
+- Added two GUI test buttons on main screen to emulate ACC events: `Emulate ACC ON` and `Emulate ACC OFF`.
+- Hardened ACC target editor action buttons for HU theme quirks:
+  - kept themed vector drawables,
+  - added compatible `drawableLeft` binding,
+  - added visible text-symbol fallback labels.
+- Increased app icon size in target edit dialog (activity + delay) to `64dp x 64dp`.
+
 ### 2026-03-26
 - ACC ON target editor buttons now use app-owned vector pictograms with theme-aware tint (visible in both dark and light themes).
 - App selection dialog now shows app icons next to app name and package.

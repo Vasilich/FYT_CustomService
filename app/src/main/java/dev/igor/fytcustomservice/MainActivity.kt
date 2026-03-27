@@ -51,6 +51,8 @@ class MainActivity : AppCompatActivity() {
         val btnSettings = findViewById<Button>(R.id.btnSettings)
         val btnAccOnTargets = findViewById<Button>(R.id.btnAccOnTargets)
         val btnTestCommand = findViewById<Button>(R.id.btnTestCommand)
+        val btnEmulateAccOn = findViewById<Button>(R.id.btnEmulateAccOn)
+        val btnEmulateAccOff = findViewById<Button>(R.id.btnEmulateAccOff)
 
         btnStart.setOnClickListener {
             ContextCompat.startForegroundService(
@@ -81,6 +83,13 @@ class MainActivity : AppCompatActivity() {
                 putExtra(FytForegroundService.EXTRA_ARG1, 77)
             }
             sendBroadcast(commandIntent)
+        }
+
+        btnEmulateAccOn.setOnClickListener {
+            emulateAccBroadcast(AccPowerReceiver.ACTION_ACC_ON)
+        }
+        btnEmulateAccOff.setOnClickListener {
+            emulateAccBroadcast(AccPowerReceiver.ACTION_ACC_OFF)
         }
 
         requestNotificationPermissionIfNeeded()
@@ -452,6 +461,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun emulateAccBroadcast(action: String) {
+        val intent = Intent(this, AccPowerReceiver::class.java).apply {
+            this.action = action
+        }
+        sendBroadcast(intent)
+        toast("Sent $action")
     }
 
     private fun refreshServiceStatusText() {

@@ -24,10 +24,11 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:drawableLeft="@drawable/ic_target_add"
             android:drawablePadding="6dp"
             android:drawableStart="@drawable/ic_target_add"
             android:drawableTint="?android:textColorPrimary"
-            android:text="Add" />
+            android:text="+ Add" />
 
         <Button
             android:id="@+id/btnEditTarget"
@@ -35,10 +36,11 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
+            android:drawableLeft="@drawable/ic_target_edit"
             android:drawablePadding="6dp"
             android:drawableStart="@drawable/ic_target_edit"
             android:drawableTint="?android:textColorPrimary"
-            android:text="Edit" />
+            android:text="E Edit" />
 
         <Button
             android:id="@+id/btnDeleteTarget"
@@ -46,10 +48,11 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
+            android:drawableLeft="@drawable/ic_target_delete"
             android:drawablePadding="6dp"
             android:drawableStart="@drawable/ic_target_delete"
             android:drawableTint="?android:textColorPrimary"
-            android:text="Delete" />
+            android:text="X Delete" />
     </LinearLayout>
 
     <LinearLayout
@@ -63,10 +66,11 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:drawableLeft="@drawable/ic_target_up"
             android:drawablePadding="6dp"
             android:drawableStart="@drawable/ic_target_up"
             android:drawableTint="?android:textColorPrimary"
-            android:text="Move up" />
+            android:text="^ Move up" />
 
         <Button
             android:id="@+id/btnMoveDownTarget"
@@ -74,10 +78,11 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
+            android:drawableLeft="@drawable/ic_target_down"
             android:drawablePadding="6dp"
             android:drawableStart="@drawable/ic_target_down"
             android:drawableTint="?android:textColorPrimary"
-            android:text="Move down" />
+            android:text="v Move down" />
     </LinearLayout>
 
 </LinearLayout>

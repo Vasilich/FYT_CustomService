@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.os.Environment
 import android.provider.MediaStore
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.time.Instant
 import java.time.ZoneId
@@ -17,6 +18,8 @@ object AccEventStateStore {
     private const val KEY_LAST_ACC_OFF_MS = "last_acc_off_ms"
     private const val KEY_LAST_SAVED_PLAYER = "last_saved_player"
     private const val KEY_LAST_STARTED_PLAYER = "last_started_player"
+    private const val KEY_LAST_SAVED_PLAYER_STATE = "last_saved_player_state"
+    private const val KEY_LAST_STARTED_PLAYER_STATE = "last_started_player_state"
 
     fun setLastAccOnTimestamp(context: Context, epochMs: Long = System.currentTimeMillis()) {
         prefs(context).edit().putLong(KEY_LAST_ACC_ON_MS, epochMs).apply()
@@ -44,12 +47,39 @@ object AccEventStateStore {
         return prefs(context).getString(KEY_LAST_SAVED_PLAYER, null)
     }
 
+    fun setLastSavedPlayerState(context: Context, state: String?) {
+        prefs(context).edit().putString(KEY_LAST_SAVED_PLAYER_STATE, state).apply()
+    }
+
+    fun getLastSavedPlayerState(context: Context): String? {
+        return prefs(context).getString(KEY_LAST_SAVED_PLAYER_STATE, null)
+    }
+
     fun setLastStartedPlayer(context: Context, packageName: String?) {
         prefs(context).edit().putString(KEY_LAST_STARTED_PLAYER, packageName).apply()
     }
 
     fun getLastStartedPlayer(context: Context): String? {
         return prefs(context).getString(KEY_LAST_STARTED_PLAYER, null)
+    }
+
+    fun setLastStartedPlayerState(context: Context, state: String?) {
+        prefs(context).edit().putString(KEY_LAST_STARTED_PLAYER_STATE, state).apply()
+    }
+
+    fun getLastStartedPlayerState(context: Context): String? {
+        return prefs(context).getString(KEY_LAST_STARTED_PLAYER_STATE, null)
+    }
+
+    fun clear(context: Context) {
+        prefs(context).edit()
+            .remove(KEY_LAST_ACC_ON_MS)
+            .remove(KEY_LAST_ACC_OFF_MS)
+            .remove(KEY_LAST_SAVED_PLAYER)
+            .remove(KEY_LAST_STARTED_PLAYER)
+            .remove(KEY_LAST_SAVED_PLAYER_STATE)
+            .remove(KEY_LAST_STARTED_PLAYER_STATE)
+            .apply()
     }
 
     private fun prefs(context: Context) =
@@ -59,11 +89,15 @@ object AccEventStateStore {
 object AccEventLog {
     private const val FILE_NAME = "FYTCustomService-acc.log"
     private val RELATIVE_PATH = "${Environment.DIRECTORY_DOCUMENTS}/FYTService"
+    private const val PREFS_NAME = "fyt_custom_service_acc_log"
+    private const val KEY_ACTIVE_LOG_ID = "active_log_id"
+    private const val MAX_LOG_SIZE_BYTES = 100 * 1024L
 
     fun append(context: Context, message: String) {
         val line = "${formatTimestamp(System.currentTimeMillis())} | $message\n"
         runCatching {
             val uri = getOrCreateLogUri(context) ?: return
+            rotateIfNeeded(context, uri, line.toByteArray(Charsets.UTF_8).size)
             val pfd = context.contentResolver.openFileDescriptor(uri, "wa")
                 ?: context.contentResolver.openFileDescriptor(uri, "w")
                 ?: return
@@ -76,31 +110,101 @@ object AccEventLog {
         }
     }
 
+    private fun rotateIfNeeded(context: Context, sourceUri: android.net.Uri, incomingSize: Int) {
+        val sourcePfd = context.contentResolver.openFileDescriptor(sourceUri, "r") ?: return
+        val currentSize = sourcePfd.use { it.statSize }
+        if (currentSize < 0 || currentSize + incomingSize <= MAX_LOG_SIZE_BYTES) return
+
+        val stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.US).format(
+            Instant.now().atZone(ZoneId.systemDefault())
+        )
+        val archiveName = "FYTCustomService-acc-$stamp.log"
+        val archiveUri = createLogUri(context, archiveName) ?: return
+
+        val input = context.contentResolver.openFileDescriptor(sourceUri, "r") ?: return
+        val output = context.contentResolver.openFileDescriptor(archiveUri, "w") ?: return
+        input.use { src ->
+            output.use { dst ->
+                FileInputStream(src.fileDescriptor).use { fis ->
+                    FileOutputStream(dst.fileDescriptor).use { fos ->
+                        fis.copyTo(fos)
+                        fos.flush()
+                    }
+                }
+            }
+        }
+
+        val truncatePfd = context.contentResolver.openFileDescriptor(sourceUri, "rw") ?: return
+        truncatePfd.use { pfd ->
+            FileOutputStream(pfd.fileDescriptor).channel.use { ch ->
+                ch.truncate(0L)
+            }
+        }
+    }
+
     private fun getOrCreateLogUri(context: Context): android.net.Uri? {
         val resolver = context.contentResolver
-        val projection = arrayOf(MediaStore.Downloads._ID)
-        val selection = "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH}=?"
-        val selectionArgs = arrayOf(FILE_NAME, "$RELATIVE_PATH/")
+        val cachedId = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getLong(KEY_ACTIVE_LOG_ID, -1L)
+        if (cachedId > 0L) {
+            val cachedUri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), cachedId)
+            val pfd = resolver.openFileDescriptor(cachedUri, "r")
+            if (pfd != null) {
+                pfd.close()
+                return cachedUri
+            }
+        }
+
+        val found = findExistingLogUri(context, FILE_NAME)
+        if (found != null) {
+            cacheLogId(context, ContentUris.parseId(found))
+            return found
+        }
+
+        val created = createLogUri(context, FILE_NAME)
+        if (created != null) {
+            cacheLogId(context, ContentUris.parseId(created))
+        }
+        return created
+    }
+
+    private fun findExistingLogUri(context: Context, fileName: String): android.net.Uri? {
+        val resolver = context.contentResolver
+        val projection = arrayOf(MediaStore.Files.FileColumns._ID)
+        val selection =
+            "${MediaStore.Files.FileColumns.DISPLAY_NAME}=? AND ${MediaStore.Files.FileColumns.RELATIVE_PATH}=?"
+        val selectionArgs = arrayOf(fileName, "$RELATIVE_PATH/")
         resolver.query(
-            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            MediaStore.Files.getContentUri("external"),
             projection,
             selection,
             selectionArgs,
             null
         )?.use { cursor ->
             if (cursor.moveToFirst()) {
-                val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID))
-                return ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id)
+                val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID))
+                return ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), id)
             }
         }
+        return null
+    }
 
+    private fun createLogUri(context: Context, fileName: String): android.net.Uri? {
+        val resolver = context.contentResolver
         val values = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, FILE_NAME)
-            put(MediaStore.Downloads.MIME_TYPE, "text/plain")
-            put(MediaStore.Downloads.RELATIVE_PATH, RELATIVE_PATH)
-            put(MediaStore.Downloads.IS_PENDING, 0)
+            put(MediaStore.Files.FileColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.Files.FileColumns.MIME_TYPE, "text/plain")
+            put(MediaStore.Files.FileColumns.RELATIVE_PATH, RELATIVE_PATH)
+            put(MediaStore.Files.FileColumns.IS_PENDING, 0)
         }
-        return resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        return resolver.insert(MediaStore.Files.getContentUri("external"), values)
+    }
+
+    private fun cacheLogId(context: Context, id: Long) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_ACTIVE_LOG_ID, id)
+            .apply()
     }
 }
 

@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         val btnTestCommand = findViewById<Button>(R.id.btnTestCommand)
         val btnEmulateAccOn = findViewById<Button>(R.id.btnEmulateAccOn)
         val btnEmulateAccOff = findViewById<Button>(R.id.btnEmulateAccOff)
+        val btnResetAccState = findViewById<Button>(R.id.btnResetAccState)
 
         btnStart.setOnClickListener {
             ContextCompat.startForegroundService(
@@ -90,6 +91,13 @@ class MainActivity : AppCompatActivity() {
         }
         btnEmulateAccOff.setOnClickListener {
             emulateAccBroadcast(AccPowerReceiver.ACTION_ACC_OFF)
+        }
+        btnResetAccState.setOnClickListener {
+            startService(
+                Intent(this, FytForegroundService::class.java).setAction(FytForegroundService.ACTION_RESET_STATE)
+            )
+            refreshAccEventTimestamps()
+            scheduleAccUiRefresh()
         }
 
         requestNotificationPermissionIfNeeded()
@@ -469,6 +477,11 @@ class MainActivity : AppCompatActivity() {
         }
         sendBroadcast(intent)
         toast("Sent $action")
+        scheduleAccUiRefresh()
+    }
+
+    private fun scheduleAccUiRefresh() {
+        window.decorView.postDelayed({ refreshAccEventTimestamps() }, 400L)
     }
 
     private fun refreshServiceStatusText() {
@@ -482,12 +495,24 @@ class MainActivity : AppCompatActivity() {
     private fun refreshAccEventTimestamps() {
         val lastOn = AccEventTimeFormatter.formatForUi(AccEventStateStore.getLastAccOnTimestamp(this))
         val lastOff = AccEventTimeFormatter.formatForUi(AccEventStateStore.getLastAccOffTimestamp(this))
-        val lastSavedPlayer = AccEventStateStore.getLastSavedPlayer(this).orEmpty().ifBlank { "-" }
-        val lastStartedPlayer = AccEventStateStore.getLastStartedPlayer(this).orEmpty().ifBlank { "-" }
+        val lastSavedPlayer = buildPlayerWithState(
+            AccEventStateStore.getLastSavedPlayer(this),
+            AccEventStateStore.getLastSavedPlayerState(this)
+        )
+        val lastStartedPlayer = buildPlayerWithState(
+            AccEventStateStore.getLastStartedPlayer(this),
+            AccEventStateStore.getLastStartedPlayerState(this)
+        )
         lastAccOnText.text = getString(R.string.last_acc_on_format, lastOn)
         lastAccOffText.text = getString(R.string.last_acc_off_format, lastOff)
         lastSavedPlayerText.text = getString(R.string.last_saved_player_format, lastSavedPlayer)
         lastStartedPlayerText.text = getString(R.string.last_started_player_format, lastStartedPlayer)
+    }
+
+    private fun buildPlayerWithState(playerPackage: String?, state: String?): String {
+        val pkg = playerPackage.orEmpty().ifBlank { return "-" }
+        val normalizedState = state.orEmpty().ifBlank { "unknown" }
+        return "$pkg ($normalizedState)"
     }
 
     private class TargetManageAdapter(

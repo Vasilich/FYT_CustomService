@@ -71,6 +71,7 @@ class FytForegroundService : Service() {
 
             ACTION_ACC_OFF -> handleAccOff()
             ACTION_ACC_ON -> handleAccOn()
+            ACTION_RESET_STATE -> handleResetState()
             ACTION_START, null -> Unit
         }
         return START_STICKY
@@ -101,6 +102,8 @@ class FytForegroundService : Service() {
             if (snapshot == null) {
                 updateStatus("ACCOFF: no active media session")
                 AccEventLog.append(this, "ACCOFF no active media session detected")
+                AccEventStateStore.setLastSavedPlayer(this, null)
+                AccEventStateStore.setLastSavedPlayerState(this, PLAYER_STATE_STOPPED)
                 return@withShortWakeLock
             }
 
@@ -110,6 +113,10 @@ class FytForegroundService : Service() {
                 wasPlaying = snapshot.wasPlaying
             )
             AccEventStateStore.setLastSavedPlayer(this, snapshot.packageName)
+            AccEventStateStore.setLastSavedPlayerState(
+                this,
+                if (snapshot.wasPlaying) PLAYER_STATE_PLAYING else PLAYER_STATE_PAUSED
+            )
 
             MediaControlHelper.sendPause(this, snapshot.packageName)
             AccEventLog.append(
@@ -137,17 +144,21 @@ class FytForegroundService : Service() {
         }
 
         withShortWakeLock {
-            val saved = MediaStateStore.loadAccOffState(this)
-            if (saved == null) {
-                updateStatus("ACCON: nothing saved from ACCOFF")
-                AccEventLog.append(this, "ACCON no saved ACCOFF player state")
-                return@withShortWakeLock
-            }
-
-            val previousForeground = ForegroundAppHelper.getForegroundPackage(
+            val foregroundBeforeTargets = ForegroundAppHelper.getForegroundPackage(
                 context = this,
                 excludePackage = packageName
             )
+            val saved = MediaStateStore.loadAccOffState(this)
+            if (saved == null) {
+                updateStatus("ACCON: no saved player, running startup targets")
+                AccEventLog.append(this, "ACCON no saved ACCOFF player state; running startup targets only")
+                AccEventStateStore.setLastStartedPlayerState(this, PLAYER_STATE_UNKNOWN)
+                runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets) {
+                    updateStatus("ACCON done: startup targets only")
+                }
+                return@withShortWakeLock
+            }
+
             val launched = ForegroundAppHelper.launchPackage(this, saved.packageName)
             AccEventLog.append(
                 this,
@@ -157,9 +168,22 @@ class FytForegroundService : Service() {
             if (!launched) {
                 updateStatus("ACCON: failed to launch ${saved.packageName}")
                 Log.w(TAG, "ACCON failed to launch ${saved.packageName}")
+                AccEventStateStore.setLastStartedPlayer(this, saved.packageName)
+                AccEventStateStore.setLastStartedPlayerState(this, PLAYER_STATE_STOPPED)
+                AccEventLog.append(
+                    this,
+                    "ACCON saved player launch failed; running startup targets anyway"
+                )
+                runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets) {
+                    updateStatus("ACCON done: startup targets only (saved launch failed)")
+                }
                 return@withShortWakeLock
             }
             AccEventStateStore.setLastStartedPlayer(this, saved.packageName)
+            AccEventStateStore.setLastStartedPlayerState(
+                this,
+                if (saved.wasPlaying) PLAYER_STATE_PLAYING else PLAYER_STATE_PAUSED
+            )
 
             val delayMs = ServiceSettings.accOnPlayDelayMs(this)
             updateStatus("ACCON: launched ${saved.packageName}, waiting ${delayMs}ms")
@@ -180,24 +204,7 @@ class FytForegroundService : Service() {
                         )
                     }
 
-                    runConfiguredStartupTargets {
-                        if (!previousForeground.isNullOrBlank() && previousForeground != saved.packageName) {
-                            val restored = ForegroundAppHelper.launchPackage(this, previousForeground)
-                            Log.i(
-                                TAG,
-                                "ACCON restore foreground package=$previousForeground result=$restored"
-                            )
-                            AccEventLog.append(
-                                this,
-                                "ACCON restore previousForeground=$previousForeground result=$restored"
-                            )
-                        } else {
-                            AccEventLog.append(
-                                this,
-                                "ACCON restore previousForeground skipped (none or same as saved player)"
-                            )
-                        }
-
+                    runConfiguredStartupTargets(restorePackage = saved.packageName) {
                         MediaStateStore.clearAccOffState(this)
                         AccEventLog.append(this, "ACCON cleared saved ACCOFF player state")
                         updateStatus("ACCON done: ${saved.packageName}")
@@ -210,10 +217,11 @@ class FytForegroundService : Service() {
         }
     }
 
-    private fun runConfiguredStartupTargets(onDone: () -> Unit) {
+    private fun runConfiguredStartupTargets(restorePackage: String?, onDone: () -> Unit) {
         val targets = AccOnStartupStore.load(this)
         if (targets.isEmpty()) {
             AccEventLog.append(this, "ACCON startup targets: none configured")
+            restoreForegroundPackage(restorePackage)
             onDone()
             return
         }
@@ -222,6 +230,7 @@ class FytForegroundService : Service() {
         fun scheduleNext(index: Int) {
             if (index >= targets.size) {
                 AccEventLog.append(this, "ACCON startup targets completed")
+                restoreForegroundPackage(restorePackage)
                 onDone()
                 return
             }
@@ -267,6 +276,19 @@ class FytForegroundService : Service() {
         scheduleNext(0)
     }
 
+    private fun restoreForegroundPackage(packageName: String?) {
+        if (packageName.isNullOrBlank()) {
+            AccEventLog.append(this, "ACCON restore previousForeground skipped (none)")
+            return
+        }
+        val restored = ForegroundAppHelper.launchPackage(this, packageName)
+        Log.i(TAG, "ACCON restore foreground package=$packageName result=$restored")
+        AccEventLog.append(
+            this,
+            "ACCON restore previousForeground=$packageName result=$restored"
+        )
+    }
+
     private fun clearPendingStartupRunnables() {
         pendingStartupRunnables.forEach(handler::removeCallbacks)
         pendingStartupRunnables.clear()
@@ -309,6 +331,15 @@ class FytForegroundService : Service() {
             }
         }
         return duplicate
+    }
+
+    private fun handleResetState() {
+        MediaStateStore.clearAccOffState(this)
+        AccEventStateStore.clear(this)
+        lastAccOnHandledAtMs = 0L
+        lastAccOffHandledAtMs = 0L
+        AccEventLog.append(this, "RESET state requested: cleared ACC timestamps/player markers/saved ACCOFF state")
+        updateStatus("State reset complete")
     }
 
     private inline fun withShortWakeLock(block: () -> Unit) {
@@ -378,6 +409,7 @@ class FytForegroundService : Service() {
         const val ACTION_EXECUTE = "dev.igor.fytcustomservice.EXECUTE"
         const val ACTION_ACC_ON = "dev.igor.fytcustomservice.ACC_ON"
         const val ACTION_ACC_OFF = "dev.igor.fytcustomservice.ACC_OFF"
+        const val ACTION_RESET_STATE = "dev.igor.fytcustomservice.RESET_STATE"
 
         const val EXTRA_COMMAND_CODE = "extra_command_code"
         const val EXTRA_ARG1 = "extra_arg1"
@@ -385,7 +417,12 @@ class FytForegroundService : Service() {
         private const val TAG = "FytForegroundService"
         private const val CHANNEL_ID = "fyt_custom_service_channel"
         private const val NOTIFICATION_ID = 7870
-        private const val ACC_EVENT_DEBOUNCE_MS = 1_500L
+        private const val ACC_EVENT_DEBOUNCE_MS = 30_000L
         private const val WAKE_LOCK_TIMEOUT_MS = 10_000L
+
+        private const val PLAYER_STATE_PLAYING = "playing"
+        private const val PLAYER_STATE_PAUSED = "paused"
+        private const val PLAYER_STATE_STOPPED = "stopped"
+        private const val PLAYER_STATE_UNKNOWN = "unknown"
     }
 }

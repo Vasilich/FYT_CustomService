@@ -147,6 +147,23 @@ Logged details include:
 - Previous foreground restore attempt/result.
 
 ## Changelog
+### 2026-03-28
+- Reworked ACC target editor action buttons to use real AppCompat icon drawables (no letter fallbacks), including day/night icon resources for visibility in both light and dark themes.
+- Added ACC state reset action in GUI (`Reset ACC state`) in the same row as ACC test buttons.
+- Added immediate UI refresh after ACC test actions so ACC/player markers update on screen without reopening settings.
+- Changed status block layout to 2 rows x 2 columns:
+  - left: `Last ACC ON`, `Last ACC OFF`
+  - right: `Last saved player`, `Last started player`
+- Extended player markers to include state display for both saved and started player:
+  - `playing`, `paused`, `stopped`, `unknown`
+- Updated ACC handling:
+  - duplicate debounce is now 30 seconds per same event type (ACCON only vs ACCON, ACCOFF only vs ACCOFF),
+  - ACCON still executes startup-target flow when no ACCOFF snapshot exists,
+  - foreground app restore after startup-target execution was hardened.
+- Reworked ACC logging backend:
+  - single active log file in `Documents/FYTService/FYTCustomService-acc.log`,
+  - size-based rotation at 100 kB with timestamped archive files.
+
 ### 2026-03-27
 - Added runtime ACC receiver inside foreground service as an additional receive path for FYT/GLSX ACC broadcasts, with forwarding logs.
 - Added two GUI test buttons on main screen to emulate ACC events: `Emulate ACC ON` and `Emulate ACC OFF`.

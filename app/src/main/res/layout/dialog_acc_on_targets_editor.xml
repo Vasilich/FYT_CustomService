@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -19,40 +20,34 @@
         android:layout_marginTop="10dp"
         android:orientation="horizontal">
 
-        <Button
+        <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/btnAddTarget"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:drawableLeft="@drawable/ic_target_add"
             android:drawablePadding="6dp"
-            android:drawableStart="@drawable/ic_target_add"
-            android:drawableTint="?android:textColorPrimary"
-            android:text="+ Add" />
+            app:drawableStartCompat="@drawable/ic_target_add"
+            android:text="Add" />
 
-        <Button
+        <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/btnEditTarget"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
-            android:drawableLeft="@drawable/ic_target_edit"
             android:drawablePadding="6dp"
-            android:drawableStart="@drawable/ic_target_edit"
-            android:drawableTint="?android:textColorPrimary"
-            android:text="E Edit" />
+            app:drawableStartCompat="@drawable/ic_target_edit"
+            android:text="Edit" />
 
-        <Button
+        <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/btnDeleteTarget"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
-            android:drawableLeft="@drawable/ic_target_delete"
             android:drawablePadding="6dp"
-            android:drawableStart="@drawable/ic_target_delete"
-            android:drawableTint="?android:textColorPrimary"
-            android:text="X Delete" />
+            app:drawableStartCompat="@drawable/ic_target_delete"
+            android:text="Delete" />
     </LinearLayout>
 
     <LinearLayout
@@ -61,28 +56,24 @@
         android:layout_marginTop="6dp"
         android:orientation="horizontal">
 
-        <Button
+        <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/btnMoveUpTarget"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:drawableLeft="@drawable/ic_target_up"
             android:drawablePadding="6dp"
-            android:drawableStart="@drawable/ic_target_up"
-            android:drawableTint="?android:textColorPrimary"
-            android:text="^ Move up" />
+            app:drawableStartCompat="@drawable/ic_target_up"
+            android:text="Move up" />
 
-        <Button
+        <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/btnMoveDownTarget"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
-            android:drawableLeft="@drawable/ic_target_down"
             android:drawablePadding="6dp"
-            android:drawableStart="@drawable/ic_target_down"
-            android:drawableTint="?android:textColorPrimary"
-            android:text="v Move down" />
+            app:drawableStartCompat="@drawable/ic_target_down"
+            android:text="Move down" />
     </LinearLayout>
 
 </LinearLayout>

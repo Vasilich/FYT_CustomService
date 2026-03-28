@@ -110,19 +110,16 @@ class FytForegroundService : Service() {
             val persisted = MediaStateStore.saveAccOffState(
                 context = this,
                 packageName = snapshot.packageName,
-                wasPlaying = snapshot.wasPlaying
+                wasPlaying = true
             )
             AccEventStateStore.setLastSavedPlayer(this, snapshot.packageName)
-            AccEventStateStore.setLastSavedPlayerState(
-                this,
-                if (snapshot.wasPlaying) PLAYER_STATE_PLAYING else PLAYER_STATE_PAUSED
-            )
+            AccEventStateStore.setLastSavedPlayerState(this, PLAYER_STATE_UNKNOWN)
 
             MediaControlHelper.sendPause(this, snapshot.packageName)
             AccEventLog.append(
                 this,
                 "ACCOFF activePlayer=${snapshot.packageName} wasPlaying=${snapshot.wasPlaying} " +
-                    "persisted=$persisted pauseSent=true"
+                    "persisted=$persisted pauseSent=true (playStateIgnored=true)"
             )
 
             Log.i(
@@ -180,10 +177,7 @@ class FytForegroundService : Service() {
                 return@withShortWakeLock
             }
             AccEventStateStore.setLastStartedPlayer(this, saved.packageName)
-            AccEventStateStore.setLastStartedPlayerState(
-                this,
-                if (saved.wasPlaying) PLAYER_STATE_PLAYING else PLAYER_STATE_PAUSED
-            )
+            AccEventStateStore.setLastStartedPlayerState(this, PLAYER_STATE_PLAYING)
 
             val delayMs = ServiceSettings.accOnPlayDelayMs(this)
             updateStatus("ACCON: launched ${saved.packageName}, waiting ${delayMs}ms")
@@ -193,16 +187,9 @@ class FytForegroundService : Service() {
             clearPendingStartupRunnables()
             val run = Runnable {
                 withShortWakeLock {
-                    if (saved.wasPlaying) {
-                        MediaControlHelper.sendPlay(this, saved.packageName)
-                        Log.i(TAG, "ACCON PLAY sent to ${saved.packageName}")
-                        AccEventLog.append(this, "ACCON sent PLAY to saved player ${saved.packageName}")
-                    } else {
-                        AccEventLog.append(
-                            this,
-                            "ACCON skipped PLAY for saved player ${saved.packageName} because wasPlaying=false"
-                        )
-                    }
+                    MediaControlHelper.sendPlay(this, saved.packageName)
+                    Log.i(TAG, "ACCON PLAY sent to ${saved.packageName}")
+                    AccEventLog.append(this, "ACCON sent PLAY to saved player ${saved.packageName} (always)")
 
                     val foregroundBeforeTargetStart = ForegroundAppHelper.getForegroundPackage(
                         context = this,
@@ -294,8 +281,9 @@ class FytForegroundService : Service() {
         )
         // Some FYT launchers/apps race and bring the last target back on top.
         // Re-assert restore shortly after to keep the expected foreground app.
-        handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 350L)
-        handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 900L)
+        handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 500L)
+        handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 1500L)
+        handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 3000L)
     }
 
     private fun clearPendingStartupRunnables() {
@@ -330,6 +318,14 @@ class FytForegroundService : Service() {
 
     private fun isDuplicateAccEvent(isAccOn: Boolean): Boolean {
         val now = SystemClock.elapsedRealtime()
+        if (isAccOn && lastAccOffHandledAtMs > lastAccOnHandledAtMs) {
+            lastAccOnHandledAtMs = now
+            return false
+        }
+        if (!isAccOn && lastAccOnHandledAtMs > lastAccOffHandledAtMs) {
+            lastAccOffHandledAtMs = now
+            return false
+        }
         val last = if (isAccOn) lastAccOnHandledAtMs else lastAccOffHandledAtMs
         val duplicate = now - last < ACC_EVENT_DEBOUNCE_MS
         if (!duplicate) {

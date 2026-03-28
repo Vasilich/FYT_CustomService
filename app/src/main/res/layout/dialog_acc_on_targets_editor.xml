@@ -25,7 +25,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:backgroundTint="?attr/colorPrimary"
             android:drawablePadding="6dp"
+            android:textColor="@android:color/white"
             app:drawableStartCompat="@drawable/ic_target_add"
             android:text="Add" />
 
@@ -35,7 +37,9 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
+            android:backgroundTint="?attr/colorPrimary"
             android:drawablePadding="6dp"
+            android:textColor="@android:color/white"
             app:drawableStartCompat="@drawable/ic_target_edit"
             android:text="Edit" />
 
@@ -45,7 +49,9 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
+            android:backgroundTint="?attr/colorPrimary"
             android:drawablePadding="6dp"
+            android:textColor="@android:color/white"
             app:drawableStartCompat="@drawable/ic_target_delete"
             android:text="Delete" />
     </LinearLayout>
@@ -61,7 +67,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:backgroundTint="?attr/colorPrimary"
             android:drawablePadding="6dp"
+            android:textColor="@android:color/white"
             app:drawableStartCompat="@drawable/ic_target_up"
             android:text="Move up" />
 
@@ -71,7 +79,9 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
+            android:backgroundTint="?attr/colorPrimary"
             android:drawablePadding="6dp"
+            android:textColor="@android:color/white"
             app:drawableStartCompat="@drawable/ic_target_down"
             android:text="Move down" />
     </LinearLayout>

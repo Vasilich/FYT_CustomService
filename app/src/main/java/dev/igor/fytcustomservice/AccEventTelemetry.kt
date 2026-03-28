@@ -224,7 +224,12 @@ object AccEventLog {
 object AccEventTimeFormatter {
     fun formatForUi(epochMs: Long?): String {
         if (epochMs == null) return "never"
-        return formatTimestamp(epochMs)
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        return formatter.format(
+            Instant.ofEpochMilli(epochMs)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime()
+        )
     }
 }
 

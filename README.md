@@ -61,6 +61,23 @@ ACCOFF flow:
 5. Persist last-received ACCOFF timestamp.
 6. Append ACCOFF diagnostics to log file.
 
+Note on play-state handling:
+- Play-state detection from ACCOFF is intentionally not used anymore.
+- Reason: on tested FYT firmware, media is often already paused/stopped before ACCOFF broadcast is observed, so stored state was unreliable.
+- Decompiled FYT chain confirms ACCOFF broadcast dispatch (`C2444q0.m7483b(0)`), and upstream ACC transition handler (`C2692d.m10441i`) performs mute/LCDC transitions before that broadcast.
+- No direct explicit media `PAUSE/STOP` call was found in that exact ACCOFF broadcast dispatch chain; this is an implementation-level inference from the inspected code paths.
+- Decompiled references used for this conclusion:
+  - `D:\SinoSmart\Decompiled\com.syu.ms\app\src\main\java\m1\q0.java` (`b(int i2)`, lines ~447-454): sends `com.glsx.boot.ACCOFF` and `com.fyt.boot.ACCOFF`.
+  - `D:\SinoSmart\Decompiled\com.syu.ms\app\src\main\java\p043m1\C2444q0.java` (`m7483b(int i2)`, lines ~512-519): same ACCON/ACCOFF dispatch in obfuscated namespace.
+  - `D:\SinoSmart\Decompiled\com.syu.ms\app\src\main\java\p058s0\C2692d.java` (`m10441i(int i2)`, lines ~3258-3291): ACC state update path, calls mute/LCDC handling and then `C2444q0.m7483b(i2)`.
+  - `D:\SinoSmart\Decompiled\com.syu.ms\app\src\main\java\p043m1\C2444q0.java` (`m7494m(int i2)`, lines ~586-617; `m7506y(int i2)`, lines ~993-1013): LCDC/amp mute control on ACC transitions.
+
+Mute AMP logic (what it actually does):
+- FYT mute-AMP path is hardware-level output muting, not media-app playback control.
+- In ACC transition flow (`C2692d.m10441i`), the code calls `C2444q0.m7506y(...)`, which writes amp mute/unmute commands through JNI/native layer (`ToolsJni.cmd_6_mute_amp(...)` or `ControlNative.fytMuteAMP(...)` on some variants).
+- Practical effect: audio output path is muted/unmuted globally at amp/MCU level.
+- This is separate from media-session transport control (`PLAY/PAUSE/STOP`) and does not by itself prove player state transitions.
+
 Receiver robustness notes:
 - `AccPowerReceiver` is marked `directBootAware=true` (can receive pre-unlock phase).
 - Receiver first tries `startForegroundService(...)` and falls back to `startService(...)` if needed by firmware/runtime constraints.
@@ -147,6 +164,16 @@ Logged details include:
 - Previous foreground restore attempt/result.
 
 ## Changelog
+### 2026-03-28 (update 2)
+- Improved ACC event debounce handling so `ACCON` is not incorrectly blocked after a recent `ACCOFF` (and vice versa).
+- Updated ACCON behavior to always send `PLAY` to the saved player after launch (saved play-state from ACCOFF is no longer used for decision).
+- Strengthened post-startup foreground restoration:
+  - uses stronger launch flags for bring-to-front behavior,
+  - adds delayed restore retries to handle FYT foreground race conditions.
+- Swapped GUI timestamp row order in the left status column:
+  - row 1: `Last ACC OFF`
+  - row 2: `Last ACC ON`
+
 ### 2026-03-28
 - Reworked ACC target editor action buttons to use real AppCompat icon drawables (no letter fallbacks), including day/night icon resources for visibility in both light and dark themes.
 - Added ACC state reset action in GUI (`Reset ACC state`) in the same row as ACC test buttons.

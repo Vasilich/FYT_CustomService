@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.time.Instant
@@ -88,10 +89,11 @@ object AccEventStateStore {
 
 object AccEventLog {
     private const val FILE_NAME = "FYTCustomService-acc.log"
-    private val RELATIVE_PATH = "${Environment.DIRECTORY_DOCUMENTS}/FYTService"
+    private val RELATIVE_PATH = "${Environment.DIRECTORY_DOCUMENTS}/FYTService/"
     private const val PREFS_NAME = "fyt_custom_service_acc_log"
-    private const val KEY_ACTIVE_LOG_ID = "active_log_id"
+    private const val KEY_ACTIVE_LOG_URI = "active_log_uri"
     private const val MAX_LOG_SIZE_BYTES = 100 * 1024L
+    private const val TAG = "AccEventLog"
 
     fun append(context: Context, message: String) {
         val line = "${formatTimestamp(System.currentTimeMillis())} | $message\n"
@@ -107,6 +109,8 @@ object AccEventLog {
                     fos.flush()
                 }
             }
+        }.onFailure { err ->
+            Log.e(TAG, "Failed to append log", err)
         }
     }
 
@@ -144,10 +148,10 @@ object AccEventLog {
 
     private fun getOrCreateLogUri(context: Context): android.net.Uri? {
         val resolver = context.contentResolver
-        val cachedId = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getLong(KEY_ACTIVE_LOG_ID, -1L)
-        if (cachedId > 0L) {
-            val cachedUri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), cachedId)
+        val cachedUriText = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_ACTIVE_LOG_URI, null)
+        if (!cachedUriText.isNullOrBlank()) {
+            val cachedUri = android.net.Uri.parse(cachedUriText)
             val pfd = resolver.openFileDescriptor(cachedUri, "r")
             if (pfd != null) {
                 pfd.close()
@@ -157,13 +161,13 @@ object AccEventLog {
 
         val found = findExistingLogUri(context, FILE_NAME)
         if (found != null) {
-            cacheLogId(context, ContentUris.parseId(found))
+            cacheLogUri(context, found)
             return found
         }
 
         val created = createLogUri(context, FILE_NAME)
         if (created != null) {
-            cacheLogId(context, ContentUris.parseId(created))
+            cacheLogUri(context, created)
         }
         return created
     }
@@ -173,7 +177,7 @@ object AccEventLog {
         val projection = arrayOf(MediaStore.Files.FileColumns._ID)
         val selection =
             "${MediaStore.Files.FileColumns.DISPLAY_NAME}=? AND ${MediaStore.Files.FileColumns.RELATIVE_PATH}=?"
-        val selectionArgs = arrayOf(fileName, "$RELATIVE_PATH/")
+        val selectionArgs = arrayOf(fileName, RELATIVE_PATH)
         resolver.query(
             MediaStore.Files.getContentUri("external"),
             projection,
@@ -197,13 +201,22 @@ object AccEventLog {
             put(MediaStore.Files.FileColumns.RELATIVE_PATH, RELATIVE_PATH)
             put(MediaStore.Files.FileColumns.IS_PENDING, 0)
         }
-        return resolver.insert(MediaStore.Files.getContentUri("external"), values)
+        val fileUri = resolver.insert(MediaStore.Files.getContentUri("external"), values)
+        if (fileUri != null) return fileUri
+
+        val dlValues = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+            put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+            put(MediaStore.Downloads.RELATIVE_PATH, RELATIVE_PATH)
+            put(MediaStore.Downloads.IS_PENDING, 0)
+        }
+        return resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, dlValues)
     }
 
-    private fun cacheLogId(context: Context, id: Long) {
+    private fun cacheLogUri(context: Context, uri: android.net.Uri) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putLong(KEY_ACTIVE_LOG_ID, id)
+            .putString(KEY_ACTIVE_LOG_URI, uri.toString())
             .apply()
     }
 }

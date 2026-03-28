@@ -204,7 +204,12 @@ class FytForegroundService : Service() {
                         )
                     }
 
-                    runConfiguredStartupTargets(restorePackage = saved.packageName) {
+                    val foregroundBeforeTargetStart = ForegroundAppHelper.getForegroundPackage(
+                        context = this,
+                        excludePackage = packageName
+                    ) ?: saved.packageName
+
+                    runConfiguredStartupTargets(restorePackage = foregroundBeforeTargetStart) {
                         MediaStateStore.clearAccOffState(this)
                         AccEventLog.append(this, "ACCON cleared saved ACCOFF player state")
                         updateStatus("ACCON done: ${saved.packageName}")
@@ -287,6 +292,10 @@ class FytForegroundService : Service() {
             this,
             "ACCON restore previousForeground=$packageName result=$restored"
         )
+        // Some FYT launchers/apps race and bring the last target back on top.
+        // Re-assert restore shortly after to keep the expected foreground app.
+        handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 350L)
+        handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 900L)
     }
 
     private fun clearPendingStartupRunnables() {

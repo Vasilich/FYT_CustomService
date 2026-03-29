@@ -216,7 +216,11 @@ class FytForegroundService : Service() {
 
     private fun restoreForegroundPackage(packageName: String?) {
         if (packageName.isNullOrBlank()) {
-            AccEventLog.append(this, "ACCON restore previousForeground skipped (none)")
+            val homeLaunched = launchHomeScreen()
+            AccEventLog.append(
+                this,
+                "ACCON restore previousForeground missing; launched HOME result=$homeLaunched"
+            )
             return
         }
         val restored = ForegroundAppHelper.launchPackage(this, packageName)
@@ -230,6 +234,20 @@ class FytForegroundService : Service() {
         handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 500L)
         handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 1500L)
         handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 3000L)
+    }
+
+    private fun launchHomeScreen(): Boolean {
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return runCatching {
+            startActivity(homeIntent)
+            true
+        }.getOrElse { err ->
+            Log.w(TAG, "Failed to launch HOME screen", err)
+            false
+        }
     }
 
     private fun clearPendingStartupRunnables() {

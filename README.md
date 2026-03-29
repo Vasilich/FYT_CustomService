@@ -84,6 +84,7 @@ ACCON flow:
 5. Send media code `PLAY` to saved player.
 6. Execute configured ACCON startup targets in order (with per-target pauses).
 7. Restore previous foreground app.
+   - If foreground detection is unavailable, fall back to launching HOME screen.
 8. Clear saved ACCOFF package after successful ACCON handling.
 9. Persist last-received ACCON timestamp.
 10. Append ACCON diagnostics to log file.
@@ -159,6 +160,18 @@ Logged details include:
 - Previous foreground restore attempt/result.
 
 ## Changelog
+### 2026-03-29 (update 2)
+- Logging now writes to a single required file path only:
+  - `Documents/FYTService/FYTCustomService-acc.log`
+- Main screen now shows the full active log file path in a dedicated line:
+  - `Log file: ...`
+- Foreground app detection for restore was hardened:
+  - longer usage-events lookback,
+  - additional `ACTIVITY_RESUMED` event support,
+  - fallback to `UsageStats` `lastTimeUsed` when recent transition events are missing.
+- ACCON capture for `Last active app before targets` now does not exclude this app package, improving manual test reliability from the settings screen.
+- If ACCON restore has no detected previous foreground app, service now launches HOME instead of skipping restore.
+
 ### 2026-03-29
 - Removed GLSX ACC aliases from receiver and manifest handling; only FYT actions are processed:
   - `com.fyt.boot.ACCON`
@@ -168,7 +181,6 @@ Logged details include:
 - Main screen player markers no longer show player state suffix (`(playing|paused|stopped|unknown)`); package names only.
 - Added main-screen debug line: `Last active app before targets`.
 - ACCON now logs detected foreground app before startup targets and uses that captured value for restore.
-- Fixed ACC log writer descriptor fallback so file creation/appending is reliable.
 
 ### 2026-03-28 (update 2)
 - Improved ACC event debounce handling so `ACCON` is not incorrectly blocked after a recent `ACCOFF` (and vice versa).

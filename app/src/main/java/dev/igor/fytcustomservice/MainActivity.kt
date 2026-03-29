@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lastAccOffText: TextView
     private lateinit var lastSavedPlayerText: TextView
     private lateinit var lastStartedPlayerText: TextView
+    private lateinit var lastActiveAppBeforeTargetsText: TextView
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -46,6 +47,7 @@ class MainActivity : AppCompatActivity() {
         lastAccOffText = findViewById(R.id.lastAccOffText)
         lastSavedPlayerText = findViewById(R.id.lastSavedPlayerText)
         lastStartedPlayerText = findViewById(R.id.lastStartedPlayerText)
+        lastActiveAppBeforeTargetsText = findViewById(R.id.lastActiveAppBeforeTargetsText)
         val btnStart = findViewById<Button>(R.id.btnStart)
         val btnStop = findViewById<Button>(R.id.btnStop)
         val btnSettings = findViewById<Button>(R.id.btnSettings)
@@ -495,24 +497,23 @@ class MainActivity : AppCompatActivity() {
     private fun refreshAccEventTimestamps() {
         val lastOn = AccEventTimeFormatter.formatForUi(AccEventStateStore.getLastAccOnTimestamp(this))
         val lastOff = AccEventTimeFormatter.formatForUi(AccEventStateStore.getLastAccOffTimestamp(this))
-        val lastSavedPlayer = buildPlayerWithState(
-            AccEventStateStore.getLastSavedPlayer(this),
-            AccEventStateStore.getLastSavedPlayerState(this)
-        )
-        val lastStartedPlayer = buildPlayerWithState(
-            AccEventStateStore.getLastStartedPlayer(this),
-            AccEventStateStore.getLastStartedPlayerState(this)
+        val lastSavedPlayer = buildPlayerLabel(AccEventStateStore.getLastSavedPlayer(this))
+        val lastStartedPlayer = buildPlayerLabel(AccEventStateStore.getLastStartedPlayer(this))
+        val lastActiveBeforeTargets = buildPlayerLabel(
+            AccEventStateStore.getLastActiveAppBeforeStartupTargets(this)
         )
         lastAccOnText.text = getString(R.string.last_acc_on_format, lastOn)
         lastAccOffText.text = getString(R.string.last_acc_off_format, lastOff)
         lastSavedPlayerText.text = getString(R.string.last_saved_player_format, lastSavedPlayer)
         lastStartedPlayerText.text = getString(R.string.last_started_player_format, lastStartedPlayer)
+        lastActiveAppBeforeTargetsText.text = getString(
+            R.string.last_active_app_before_targets_format,
+            lastActiveBeforeTargets
+        )
     }
 
-    private fun buildPlayerWithState(playerPackage: String?, state: String?): String {
-        val pkg = playerPackage.orEmpty().ifBlank { return "-" }
-        val normalizedState = state.orEmpty().ifBlank { "unknown" }
-        return "$pkg ($normalizedState)"
+    private fun buildPlayerLabel(playerPackage: String?): String {
+        return playerPackage.orEmpty().ifBlank { "-" }
     }
 
     private class TargetManageAdapter(

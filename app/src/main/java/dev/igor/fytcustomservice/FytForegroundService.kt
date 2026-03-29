@@ -5,53 +5,25 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.PowerManager
-import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 
 class FytForegroundService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
-    private var lastAccOffHandledAtMs = 0L
-    private var lastAccOnHandledAtMs = 0L
     private var pendingAccOnRunnable: Runnable? = null
     private val pendingStartupRunnables = mutableListOf<Runnable>()
-    private var runtimeAccReceiverRegistered = false
-    private val runtimeAccReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val receivedAction = intent.action ?: return
-            val serviceAction = when (receivedAction) {
-                AccPowerReceiver.ACTION_ACC_ON, AccPowerReceiver.ACTION_GLSX_ACC_ON -> ACTION_ACC_ON
-                AccPowerReceiver.ACTION_ACC_OFF, AccPowerReceiver.ACTION_GLSX_ACC_OFF -> ACTION_ACC_OFF
-                else -> null
-            } ?: return
-            AccEventLog.append(
-                this@FytForegroundService,
-                "Runtime ACC receiver received action=$receivedAction and forwarding to service"
-            )
-            startService(
-                Intent(this@FytForegroundService, FytForegroundService::class.java).apply {
-                    action = serviceAction
-                }
-            )
-        }
-    }
 
     override fun onCreate() {
         super.onCreate()
         WatchdogScheduler.ensureScheduled(this)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Service active"))
-        registerRuntimeAccReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -83,7 +55,6 @@ class FytForegroundService : Service() {
         pendingAccOnRunnable?.let(handler::removeCallbacks)
         pendingAccOnRunnable = null
         clearPendingStartupRunnables()
-        unregisterRuntimeAccReceiver()
         super.onDestroy()
     }
 
@@ -91,119 +62,97 @@ class FytForegroundService : Service() {
         AccEventStateStore.setLastAccOffTimestamp(this)
         AccEventLog.append(this, "RECEIVED com.fyt.boot.ACCOFF")
 
-        if (isDuplicateAccEvent(isAccOn = false)) {
-            Log.i(TAG, "ACCOFF ignored as duplicate signal")
-            AccEventLog.append(this, "ACCOFF ignored: duplicate signal")
+        val snapshot = MediaControlHelper.captureCurrentMediaSnapshot(this)
+        if (snapshot == null) {
+            updateStatus("ACCOFF: no active media session")
+            AccEventLog.append(this, "ACCOFF no active media session detected")
+            AccEventStateStore.setLastSavedPlayer(this, null)
             return
         }
 
-        withShortWakeLock {
-            val snapshot = MediaControlHelper.captureCurrentMediaSnapshot(this)
-            if (snapshot == null) {
-                updateStatus("ACCOFF: no active media session")
-                AccEventLog.append(this, "ACCOFF no active media session detected")
-                AccEventStateStore.setLastSavedPlayer(this, null)
-                AccEventStateStore.setLastSavedPlayerState(this, PLAYER_STATE_STOPPED)
-                return@withShortWakeLock
-            }
+        val persisted = MediaStateStore.saveAccOffState(
+            context = this,
+            packageName = snapshot.packageName
+        )
+        AccEventStateStore.setLastSavedPlayer(this, snapshot.packageName)
 
-            val persisted = MediaStateStore.saveAccOffState(
-                context = this,
-                packageName = snapshot.packageName
-            )
-            AccEventStateStore.setLastSavedPlayer(this, snapshot.packageName)
-            AccEventStateStore.setLastSavedPlayerState(this, PLAYER_STATE_UNKNOWN)
+        MediaControlHelper.sendPause(this, snapshot.packageName)
+        AccEventLog.append(
+            this,
+            "ACCOFF activePlayer=${snapshot.packageName} persisted=$persisted pauseSent=true"
+        )
 
-            MediaControlHelper.sendPause(this, snapshot.packageName)
-            AccEventLog.append(
-                this,
-                "ACCOFF activePlayer=${snapshot.packageName} persisted=$persisted pauseSent=true"
-            )
-
-            Log.i(
-                TAG,
-                "ACCOFF saved package=${snapshot.packageName}, persisted=$persisted"
-            )
-            updateStatus("ACCOFF: ${snapshot.packageName} saved, PAUSE sent")
-        }
+        Log.i(
+            TAG,
+            "ACCOFF saved package=${snapshot.packageName}, persisted=$persisted"
+        )
+        updateStatus("ACCOFF: ${snapshot.packageName} saved, PAUSE sent")
     }
 
     private fun handleAccOn() {
         AccEventStateStore.setLastAccOnTimestamp(this)
         AccEventLog.append(this, "RECEIVED com.fyt.boot.ACCON")
 
-        if (isDuplicateAccEvent(isAccOn = true)) {
-            Log.i(TAG, "ACCON ignored as duplicate signal")
-            AccEventLog.append(this, "ACCON ignored: duplicate signal")
+        val foregroundBeforeTargets = ForegroundAppHelper.getForegroundPackage(
+            context = this,
+            excludePackage = packageName
+        )
+        AccEventStateStore.setLastActiveAppBeforeStartupTargets(this, foregroundBeforeTargets)
+        AccEventLog.append(
+            this,
+            "ACCON detected previousForegroundBeforeStartupTargets=${foregroundBeforeTargets ?: "[none]"}"
+        )
+
+        val saved = MediaStateStore.loadAccOffState(this)
+        if (saved == null) {
+            updateStatus("ACCON: no saved player, running startup targets")
+            AccEventLog.append(this, "ACCON no saved ACCOFF player state; running startup targets only")
+            runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets) {
+                updateStatus("ACCON done: startup targets only")
+            }
             return
         }
 
-        withShortWakeLock {
-            val foregroundBeforeTargets = ForegroundAppHelper.getForegroundPackage(
-                context = this,
-                excludePackage = packageName
-            )
-            val saved = MediaStateStore.loadAccOffState(this)
-            if (saved == null) {
-                updateStatus("ACCON: no saved player, running startup targets")
-                AccEventLog.append(this, "ACCON no saved ACCOFF player state; running startup targets only")
-                AccEventStateStore.setLastStartedPlayerState(this, PLAYER_STATE_UNKNOWN)
-                runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets) {
-                    updateStatus("ACCON done: startup targets only")
-                }
-                return@withShortWakeLock
-            }
-
-            val launched = ForegroundAppHelper.launchPackage(this, saved.packageName)
+        val launched = ForegroundAppHelper.launchPackage(this, saved.packageName)
+        AccEventLog.append(
+            this,
+            "ACCON savedPlayer=${saved.packageName} launchResult=$launched"
+        )
+        if (!launched) {
+            updateStatus("ACCON: failed to launch ${saved.packageName}")
+            Log.w(TAG, "ACCON failed to launch ${saved.packageName}")
+            AccEventStateStore.setLastStartedPlayer(this, saved.packageName)
             AccEventLog.append(
                 this,
-                "ACCON savedPlayer=${saved.packageName} launchResult=$launched"
+                "ACCON saved player launch failed; running startup targets anyway"
             )
-            if (!launched) {
-                updateStatus("ACCON: failed to launch ${saved.packageName}")
-                Log.w(TAG, "ACCON failed to launch ${saved.packageName}")
-                AccEventStateStore.setLastStartedPlayer(this, saved.packageName)
-                AccEventStateStore.setLastStartedPlayerState(this, PLAYER_STATE_STOPPED)
-                AccEventLog.append(
-                    this,
-                    "ACCON saved player launch failed; running startup targets anyway"
-                )
-                runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets) {
-                    updateStatus("ACCON done: startup targets only (saved launch failed)")
-                }
-                return@withShortWakeLock
+            runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets) {
+                updateStatus("ACCON done: startup targets only (saved launch failed)")
             }
-            AccEventStateStore.setLastStartedPlayer(this, saved.packageName)
-            AccEventStateStore.setLastStartedPlayerState(this, PLAYER_STATE_PLAYING)
-
-            val delayMs = ServiceSettings.accOnPlayDelayMs(this)
-            updateStatus("ACCON: launched ${saved.packageName}, waiting ${delayMs}ms")
-
-            pendingAccOnRunnable?.let(handler::removeCallbacks)
-            pendingAccOnRunnable = null
-            clearPendingStartupRunnables()
-            val run = Runnable {
-                withShortWakeLock {
-                    MediaControlHelper.sendPlay(this, saved.packageName)
-                    Log.i(TAG, "ACCON PLAY sent to ${saved.packageName}")
-                    AccEventLog.append(this, "ACCON sent PLAY to saved player ${saved.packageName} (always)")
-
-                    val foregroundBeforeTargetStart = ForegroundAppHelper.getForegroundPackage(
-                        context = this,
-                        excludePackage = packageName
-                    ) ?: saved.packageName
-
-                    runConfiguredStartupTargets(restorePackage = foregroundBeforeTargetStart) {
-                        MediaStateStore.clearAccOffState(this)
-                        AccEventLog.append(this, "ACCON cleared saved ACCOFF player state")
-                        updateStatus("ACCON done: ${saved.packageName}")
-                        pendingAccOnRunnable = null
-                    }
-                }
-            }
-            pendingAccOnRunnable = run
-            handler.postDelayed(run, delayMs.toLong())
+            return
         }
+        AccEventStateStore.setLastStartedPlayer(this, saved.packageName)
+
+        val delayMs = ServiceSettings.accOnPlayDelayMs(this)
+        updateStatus("ACCON: launched ${saved.packageName}, waiting ${delayMs}ms")
+
+        pendingAccOnRunnable?.let(handler::removeCallbacks)
+        pendingAccOnRunnable = null
+        clearPendingStartupRunnables()
+        val run = Runnable {
+            MediaControlHelper.sendPlay(this, saved.packageName)
+            Log.i(TAG, "ACCON PLAY sent to ${saved.packageName}")
+            AccEventLog.append(this, "ACCON sent PLAY to saved player ${saved.packageName} (always)")
+
+            runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets) {
+                MediaStateStore.clearAccOffState(this)
+                AccEventLog.append(this, "ACCON cleared saved ACCOFF player state")
+                updateStatus("ACCON done: ${saved.packageName}")
+                pendingAccOnRunnable = null
+            }
+        }
+        pendingAccOnRunnable = run
+        handler.postDelayed(run, delayMs.toLong())
     }
 
     private fun runConfiguredStartupTargets(restorePackage: String?, onDone: () -> Unit) {
@@ -288,73 +237,11 @@ class FytForegroundService : Service() {
         pendingStartupRunnables.clear()
     }
 
-    private fun registerRuntimeAccReceiver() {
-        if (runtimeAccReceiverRegistered) return
-        val filter = IntentFilter().apply {
-            addAction(AccPowerReceiver.ACTION_ACC_ON)
-            addAction(AccPowerReceiver.ACTION_ACC_OFF)
-            addAction(AccPowerReceiver.ACTION_GLSX_ACC_ON)
-            addAction(AccPowerReceiver.ACTION_GLSX_ACC_OFF)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(runtimeAccReceiver, filter, RECEIVER_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(runtimeAccReceiver, filter)
-        }
-        runtimeAccReceiverRegistered = true
-        AccEventLog.append(this, "Runtime ACC receiver registered")
-    }
-
-    private fun unregisterRuntimeAccReceiver() {
-        if (!runtimeAccReceiverRegistered) return
-        runCatching { unregisterReceiver(runtimeAccReceiver) }
-        runtimeAccReceiverRegistered = false
-        AccEventLog.append(this, "Runtime ACC receiver unregistered")
-    }
-
-    private fun isDuplicateAccEvent(isAccOn: Boolean): Boolean {
-        val now = SystemClock.elapsedRealtime()
-        if (isAccOn && lastAccOffHandledAtMs > lastAccOnHandledAtMs) {
-            lastAccOnHandledAtMs = now
-            return false
-        }
-        if (!isAccOn && lastAccOnHandledAtMs > lastAccOffHandledAtMs) {
-            lastAccOffHandledAtMs = now
-            return false
-        }
-        val last = if (isAccOn) lastAccOnHandledAtMs else lastAccOffHandledAtMs
-        val duplicate = now - last < ACC_EVENT_DEBOUNCE_MS
-        if (!duplicate) {
-            if (isAccOn) {
-                lastAccOnHandledAtMs = now
-            } else {
-                lastAccOffHandledAtMs = now
-            }
-        }
-        return duplicate
-    }
-
     private fun handleResetState() {
         MediaStateStore.clearAccOffState(this)
         AccEventStateStore.clear(this)
-        lastAccOnHandledAtMs = 0L
-        lastAccOffHandledAtMs = 0L
         AccEventLog.append(this, "RESET state requested: cleared ACC timestamps/player markers/saved ACCOFF state")
         updateStatus("State reset complete")
-    }
-
-    private inline fun withShortWakeLock(block: () -> Unit) {
-        val pm = getSystemService(PowerManager::class.java)
-        val wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:acc_flow")
-        wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
-        try {
-            block()
-        } finally {
-            if (wakeLock.isHeld) {
-                wakeLock.release()
-            }
-        }
     }
 
     private fun executeCommand(code: Int, arg1: Int) {
@@ -419,11 +306,5 @@ class FytForegroundService : Service() {
         private const val TAG = "FytForegroundService"
         private const val CHANNEL_ID = "fyt_custom_service_channel"
         private const val NOTIFICATION_ID = 7870
-        private const val ACC_EVENT_DEBOUNCE_MS = 30_000L
-        private const val WAKE_LOCK_TIMEOUT_MS = 10_000L
-
-        private const val PLAYER_STATE_PLAYING = "playing"
-        private const val PLAYER_STATE_STOPPED = "stopped"
-        private const val PLAYER_STATE_UNKNOWN = "unknown"
     }
 }

@@ -80,6 +80,14 @@
                 android:layout_marginTop="2dp"
                 android:text="@string/last_started_player_none"
                 android:textColor="?android:textColorSecondary" />
+
+            <TextView
+                android:id="@+id/lastActiveAppBeforeTargetsText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/last_active_app_before_targets_none"
+                android:textColor="?android:textColorSecondary" />
         </LinearLayout>
     </LinearLayout>
 
@@ -88,7 +96,9 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
+        android:backgroundTint="?attr/colorPrimary"
         android:text="Start service"
+        android:textColor="@android:color/white"
         app:layout_constraintTop_toBottomOf="@id/infoGrid"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -98,7 +108,9 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
+        android:backgroundTint="?attr/colorPrimary"
         android:text="Stop service"
+        android:textColor="@android:color/white"
         app:layout_constraintTop_toBottomOf="@id/btnStart"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -108,7 +120,9 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
+        android:backgroundTint="?attr/colorPrimary"
         android:text="Settings"
+        android:textColor="@android:color/white"
         app:layout_constraintTop_toBottomOf="@id/btnStop"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -118,7 +132,9 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
+        android:backgroundTint="?attr/colorPrimary"
         android:text="ACC ON startup targets"
+        android:textColor="@android:color/white"
         app:layout_constraintTop_toBottomOf="@id/btnSettings"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -128,7 +144,9 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
+        android:backgroundTint="?attr/colorPrimary"
         android:text="Send test command"
+        android:textColor="@android:color/white"
         app:layout_constraintTop_toBottomOf="@id/btnAccOnTargets"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -148,7 +166,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Test ACC ON" />
+            android:backgroundTint="?attr/colorPrimary"
+            android:text="Test ACC ON"
+            android:textColor="@android:color/white" />
 
         <Button
             android:id="@+id/btnEmulateAccOff"
@@ -156,7 +176,9 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="Test ACC OFF" />
+            android:backgroundTint="?attr/colorPrimary"
+            android:text="Test ACC OFF"
+            android:textColor="@android:color/white" />
 
         <Button
             android:id="@+id/btnResetAccState"
@@ -164,7 +186,9 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="Reset ACC state" />
+            android:backgroundTint="?attr/colorPrimary"
+            android:text="Reset ACC state"
+            android:textColor="@android:color/white" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

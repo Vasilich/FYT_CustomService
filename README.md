@@ -9,11 +9,8 @@
 - Listens for custom broadcast intents with numeric parameters.
 - Dispatches logic by command code in `FytForegroundService.executeCommand(...)`.
 - Handles FYT ACC events:
-  - `com.fyt.boot.ACCOFF`: save current media app package + playing state, then send `PAUSE`.
+  - `com.fyt.boot.ACCOFF`: save current media app package, then send `PAUSE`.
   - `com.fyt.boot.ACCON`: launch saved player, wait configurable delay (default 2 seconds), send `PLAY`, then restore the app that was foreground before starting the player.
-- Also handles GLSX ACC aliases sent by some firmware builds:
-  - `com.glsx.boot.ACCOFF`
-  - `com.glsx.boot.ACCON`
 - Supports ACCON startup target list (persisted on disk):
   - Configure ordered app/activity starts.
   - Per-target pause after launch.
@@ -50,16 +47,13 @@ adb shell am broadcast \
 Input broadcasts expected from FYT system:
 - `com.fyt.boot.ACCON`
 - `com.fyt.boot.ACCOFF`
-- `com.glsx.boot.ACCON` (alias on some FYT/GLSX variants)
-- `com.glsx.boot.ACCOFF` (alias on some FYT/GLSX variants)
 
 ACCOFF flow:
 1. Read current active media session.
-2. Persist `packageName` + `wasPlaying` using synchronous commit.
+2. Persist `packageName` using synchronous commit.
 3. Send media code `PAUSE`.
-4. Debounce duplicate ACCOFF broadcasts (common on some firmware variants).
-5. Persist last-received ACCOFF timestamp.
-6. Append ACCOFF diagnostics to log file.
+4. Persist last-received ACCOFF timestamp.
+5. Append ACCOFF diagnostics to log file.
 
 Note on play-state handling:
 - Play-state detection from ACCOFF is intentionally not used anymore.
@@ -67,7 +61,7 @@ Note on play-state handling:
 - Decompiled FYT chain confirms ACCOFF broadcast dispatch (`C2444q0.m7483b(0)`), and upstream ACC transition handler (`C2692d.m10441i`) performs mute/LCDC transitions before that broadcast.
 - No direct explicit media `PAUSE/STOP` call was found in that exact ACCOFF broadcast dispatch chain; this is an implementation-level inference from the inspected code paths.
 - Decompiled references used for this conclusion:
-  - `D:\SinoSmart\Decompiled\com.syu.ms\app\src\main\java\m1\q0.java` (`b(int i2)`, lines ~447-454): sends `com.glsx.boot.ACCOFF` and `com.fyt.boot.ACCOFF`.
+  - `D:\SinoSmart\Decompiled\com.syu.ms\app\src\main\java\m1\q0.java` (`b(int i2)`, lines ~447-454): sends ACC power broadcasts from the FYT service layer.
   - `D:\SinoSmart\Decompiled\com.syu.ms\app\src\main\java\p043m1\C2444q0.java` (`m7483b(int i2)`, lines ~512-519): same ACCON/ACCOFF dispatch in obfuscated namespace.
   - `D:\SinoSmart\Decompiled\com.syu.ms\app\src\main\java\p058s0\C2692d.java` (`m10441i(int i2)`, lines ~3258-3291): ACC state update path, calls mute/LCDC handling and then `C2444q0.m7483b(i2)`.
   - `D:\SinoSmart\Decompiled\com.syu.ms\app\src\main\java\p043m1\C2444q0.java` (`m7494m(int i2)`, lines ~586-617; `m7506y(int i2)`, lines ~993-1013): LCDC/amp mute control on ACC transitions.
@@ -83,14 +77,14 @@ Receiver robustness notes:
 - Receiver first tries `startForegroundService(...)` and falls back to `startService(...)` if needed by firmware/runtime constraints.
 
 ACCON flow:
-1. Load saved package/state from ACCOFF.
+1. Load saved package from ACCOFF.
 2. Capture current foreground app package.
 3. Start saved player app.
 4. Wait configured delay (`ACC ON play delay`, default `2000` ms).
-5. If player was playing before ACCOFF, send media code `PLAY`.
+5. Send media code `PLAY` to saved player.
 6. Execute configured ACCON startup targets in order (with per-target pauses).
 7. Restore previous foreground app.
-8. Clear saved ACCOFF state after successful ACCON handling.
+8. Clear saved ACCOFF package after successful ACCON handling.
 9. Persist last-received ACCON timestamp.
 10. Append ACCON diagnostics to log file.
 
@@ -156,14 +150,26 @@ Each line starts with timestamp format:
 - `yyyy-MM-dd HH:mm:ss.SSS`
 
 Logged details include:
-- ACCON/ACCOFF receive events and duplicate-ignore events.
+- ACCON/ACCOFF receive events.
 - ACCOFF active player detection and pause action.
 - ACCON saved player launch attempt/result.
-- ACCON PLAY sent/skipped with reason.
+- ACCON detected foreground app before startup-target flow.
+- ACCON PLAY sent to saved player.
 - Startup target actions per item: launched or skipped with reason (for example `already_running`).
 - Previous foreground restore attempt/result.
 
 ## Changelog
+### 2026-03-29
+- Removed GLSX ACC aliases from receiver and manifest handling; only FYT actions are processed:
+  - `com.fyt.boot.ACCON`
+  - `com.fyt.boot.ACCOFF`
+- Removed runtime ACC receiver in foreground service, keeping a single ACC receive path.
+- Removed ACC duplicate-debounce gating and wake-lock wrapper around ACC handlers.
+- Main screen player markers no longer show player state suffix (`(playing|paused|stopped|unknown)`); package names only.
+- Added main-screen debug line: `Last active app before targets`.
+- ACCON now logs detected foreground app before startup targets and uses that captured value for restore.
+- Fixed ACC log writer descriptor fallback so file creation/appending is reliable.
+
 ### 2026-03-28 (update 2)
 - Improved ACC event debounce handling so `ACCON` is not incorrectly blocked after a recent `ACCOFF` (and vice versa).
 - Updated ACCON behavior to always send `PLAY` to the saved player after launch (saved play-state from ACCOFF is no longer used for decision).

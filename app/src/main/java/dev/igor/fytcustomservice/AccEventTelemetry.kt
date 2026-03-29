@@ -19,6 +19,7 @@ object AccEventStateStore {
     private const val KEY_LAST_ACC_OFF_MS = "last_acc_off_ms"
     private const val KEY_LAST_SAVED_PLAYER = "last_saved_player"
     private const val KEY_LAST_STARTED_PLAYER = "last_started_player"
+    private const val KEY_LAST_ACTIVE_APP_BEFORE_STARTUP_TARGETS = "last_active_app_before_startup_targets"
     private const val KEY_LAST_SAVED_PLAYER_STATE = "last_saved_player_state"
     private const val KEY_LAST_STARTED_PLAYER_STATE = "last_started_player_state"
 
@@ -64,6 +65,14 @@ object AccEventStateStore {
         return prefs(context).getString(KEY_LAST_STARTED_PLAYER, null)
     }
 
+    fun setLastActiveAppBeforeStartupTargets(context: Context, packageName: String?) {
+        prefs(context).edit().putString(KEY_LAST_ACTIVE_APP_BEFORE_STARTUP_TARGETS, packageName).apply()
+    }
+
+    fun getLastActiveAppBeforeStartupTargets(context: Context): String? {
+        return prefs(context).getString(KEY_LAST_ACTIVE_APP_BEFORE_STARTUP_TARGETS, null)
+    }
+
     fun setLastStartedPlayerState(context: Context, state: String?) {
         prefs(context).edit().putString(KEY_LAST_STARTED_PLAYER_STATE, state).apply()
     }
@@ -78,6 +87,7 @@ object AccEventStateStore {
             .remove(KEY_LAST_ACC_OFF_MS)
             .remove(KEY_LAST_SAVED_PLAYER)
             .remove(KEY_LAST_STARTED_PLAYER)
+            .remove(KEY_LAST_ACTIVE_APP_BEFORE_STARTUP_TARGETS)
             .remove(KEY_LAST_SAVED_PLAYER_STATE)
             .remove(KEY_LAST_STARTED_PLAYER_STATE)
             .apply()
@@ -100,9 +110,7 @@ object AccEventLog {
         runCatching {
             val uri = getOrCreateLogUri(context) ?: return
             rotateIfNeeded(context, uri, line.toByteArray(Charsets.UTF_8).size)
-            val pfd = context.contentResolver.openFileDescriptor(uri, "wa")
-                ?: context.contentResolver.openFileDescriptor(uri, "w")
-                ?: return
+            val pfd = openWritableDescriptor(context, uri) ?: return
             pfd.use { fd ->
                 FileOutputStream(fd.fileDescriptor).use { fos ->
                     fos.write(line.toByteArray(Charsets.UTF_8))
@@ -112,6 +120,16 @@ object AccEventLog {
         }.onFailure { err ->
             Log.e(TAG, "Failed to append log", err)
         }
+    }
+
+    private fun openWritableDescriptor(
+        context: Context,
+        uri: android.net.Uri
+    ): android.os.ParcelFileDescriptor? {
+        val resolver = context.contentResolver
+        return runCatching { resolver.openFileDescriptor(uri, "wa") }.getOrNull()
+            ?: runCatching { resolver.openFileDescriptor(uri, "rw") }.getOrNull()
+            ?: runCatching { resolver.openFileDescriptor(uri, "w") }.getOrNull()
     }
 
     private fun rotateIfNeeded(context: Context, sourceUri: android.net.Uri, incomingSize: Int) {

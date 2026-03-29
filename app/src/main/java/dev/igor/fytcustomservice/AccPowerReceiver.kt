@@ -11,14 +11,14 @@ class AccPowerReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val receivedAction = intent.action ?: return
         val serviceAction = when (intent.action) {
-            ACTION_ACC_ON, ACTION_GLSX_ACC_ON -> FytForegroundService.ACTION_ACC_ON
-            ACTION_ACC_OFF, ACTION_GLSX_ACC_OFF -> FytForegroundService.ACTION_ACC_OFF
+            ACTION_ACC_ON -> FytForegroundService.ACTION_ACC_ON
+            ACTION_ACC_OFF -> FytForegroundService.ACTION_ACC_OFF
             else -> null
         } ?: return
 
-        if (receivedAction == ACTION_ACC_ON || receivedAction == ACTION_GLSX_ACC_ON) {
+        if (receivedAction == ACTION_ACC_ON) {
             AccEventStateStore.setLastAccOnTimestamp(context)
-        } else if (receivedAction == ACTION_ACC_OFF || receivedAction == ACTION_GLSX_ACC_OFF) {
+        } else if (receivedAction == ACTION_ACC_OFF) {
             AccEventStateStore.setLastAccOffTimestamp(context)
         }
         AccEventLog.append(
@@ -55,8 +55,6 @@ class AccPowerReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_ACC_ON = "com.fyt.boot.ACCON"
         const val ACTION_ACC_OFF = "com.fyt.boot.ACCOFF"
-        const val ACTION_GLSX_ACC_ON = "com.glsx.boot.ACCON"
-        const val ACTION_GLSX_ACC_OFF = "com.glsx.boot.ACCOFF"
         private const val TAG = "AccPowerReceiver"
     }
 }

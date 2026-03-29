@@ -6,7 +6,6 @@ import android.content.Intent
 import android.media.AudioManager
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
-import android.media.session.PlaybackState
 import android.util.Log
 import android.view.KeyEvent
 
@@ -17,10 +16,9 @@ object MediaControlHelper {
         val controllers = getActiveControllers(context)
         if (controllers.isEmpty()) return null
 
-        val active = controllers.firstOrNull { isPlaying(it) } ?: controllers.first()
+        val active = controllers.first()
         return SavedMediaState(
-            packageName = active.packageName,
-            wasPlaying = isPlaying(active)
+            packageName = active.packageName
         )
     }
 
@@ -94,9 +92,5 @@ object MediaControlHelper {
             Log.w(TAG, "Notification access is required to inspect active media sessions", se)
             emptyList()
         }
-    }
-
-    private fun isPlaying(controller: MediaController): Boolean {
-        return controller.playbackState?.state == PlaybackState.STATE_PLAYING
     }
 }

@@ -109,8 +109,7 @@ class FytForegroundService : Service() {
 
             val persisted = MediaStateStore.saveAccOffState(
                 context = this,
-                packageName = snapshot.packageName,
-                wasPlaying = true
+                packageName = snapshot.packageName
             )
             AccEventStateStore.setLastSavedPlayer(this, snapshot.packageName)
             AccEventStateStore.setLastSavedPlayerState(this, PLAYER_STATE_UNKNOWN)
@@ -118,13 +117,12 @@ class FytForegroundService : Service() {
             MediaControlHelper.sendPause(this, snapshot.packageName)
             AccEventLog.append(
                 this,
-                "ACCOFF activePlayer=${snapshot.packageName} wasPlaying=${snapshot.wasPlaying} " +
-                    "persisted=$persisted pauseSent=true (playStateIgnored=true)"
+                "ACCOFF activePlayer=${snapshot.packageName} persisted=$persisted pauseSent=true"
             )
 
             Log.i(
                 TAG,
-                "ACCOFF saved package=${snapshot.packageName}, wasPlaying=${snapshot.wasPlaying}, persisted=$persisted"
+                "ACCOFF saved package=${snapshot.packageName}, persisted=$persisted"
             )
             updateStatus("ACCOFF: ${snapshot.packageName} saved, PAUSE sent")
         }
@@ -159,8 +157,7 @@ class FytForegroundService : Service() {
             val launched = ForegroundAppHelper.launchPackage(this, saved.packageName)
             AccEventLog.append(
                 this,
-                "ACCON savedPlayer=${saved.packageName} wasPlaying=${saved.wasPlaying} " +
-                    "launchResult=$launched"
+                "ACCON savedPlayer=${saved.packageName} launchResult=$launched"
             )
             if (!launched) {
                 updateStatus("ACCON: failed to launch ${saved.packageName}")
@@ -426,7 +423,6 @@ class FytForegroundService : Service() {
         private const val WAKE_LOCK_TIMEOUT_MS = 10_000L
 
         private const val PLAYER_STATE_PLAYING = "playing"
-        private const val PLAYER_STATE_PAUSED = "paused"
         private const val PLAYER_STATE_STOPPED = "stopped"
         private const val PLAYER_STATE_UNKNOWN = "unknown"
     }

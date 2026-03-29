@@ -95,7 +95,7 @@ class FytForegroundService : Service() {
 
         val foregroundBeforeTargets = ForegroundAppHelper.getForegroundPackage(
             context = this,
-            excludePackage = packageName
+            excludePackage = null
         )
         AccEventStateStore.setLastActiveAppBeforeStartupTargets(this, foregroundBeforeTargets)
         AccEventLog.append(

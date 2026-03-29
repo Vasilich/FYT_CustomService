@@ -6,6 +6,7 @@
     <string name="cancel">Cancel</string>
     <string name="status_running">Status: running</string>
     <string name="status_stopped">Status: stopped</string>
+    <string name="log_file_path_format">Log file: %1$s</string>
     <string name="last_acc_on_never">Last ACC ON: never</string>
     <string name="last_acc_off_never">Last ACC OFF: never</string>
     <string name="last_acc_on_format">Last ACC ON: %1$s</string>

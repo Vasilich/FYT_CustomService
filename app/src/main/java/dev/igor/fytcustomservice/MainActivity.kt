@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
+    private lateinit var logPathText: TextView
     private lateinit var lastAccOnText: TextView
     private lateinit var lastAccOffText: TextView
     private lateinit var lastSavedPlayerText: TextView
@@ -43,6 +44,7 @@ class MainActivity : AppCompatActivity() {
         WatchdogScheduler.ensureScheduled(this)
 
         statusText = findViewById(R.id.statusText)
+        logPathText = findViewById(R.id.logPathText)
         lastAccOnText = findViewById(R.id.lastAccOnText)
         lastAccOffText = findViewById(R.id.lastAccOffText)
         lastSavedPlayerText = findViewById(R.id.lastSavedPlayerText)
@@ -492,6 +494,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.status_stopped)
         }
+        logPathText.text = getString(R.string.log_file_path_format, AccEventLog.logPathForUi(this))
     }
 
     private fun refreshAccEventTimestamps() {

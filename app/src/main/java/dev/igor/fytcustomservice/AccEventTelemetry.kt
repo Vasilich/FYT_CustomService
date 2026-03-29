@@ -1,13 +1,9 @@
 package dev.igor.fytcustomservice
 
-import android.content.ContentUris
-import android.content.ContentValues
 import android.content.Context
 import android.os.Environment
-import android.provider.MediaStore
 import android.util.Log
-import java.io.FileInputStream
-import java.io.FileOutputStream
+import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -99,142 +95,68 @@ object AccEventStateStore {
 
 object AccEventLog {
     private const val FILE_NAME = "FYTCustomService-acc.log"
-    private val RELATIVE_PATH = "${Environment.DIRECTORY_DOCUMENTS}/FYTService/"
+    private const val DIR_NAME = "FYTService"
     private const val PREFS_NAME = "fyt_custom_service_acc_log"
-    private const val KEY_ACTIVE_LOG_URI = "active_log_uri"
+    private const val KEY_LAST_SUCCESS_PATH = "last_success_path"
     private const val MAX_LOG_SIZE_BYTES = 100 * 1024L
     private const val TAG = "AccEventLog"
 
+    @Synchronized
     fun append(context: Context, message: String) {
         val line = "${formatTimestamp(System.currentTimeMillis())} | $message\n"
+        val file = publicDocumentsLogFile()
         runCatching {
-            val uri = getOrCreateLogUri(context) ?: return
-            rotateIfNeeded(context, uri, line.toByteArray(Charsets.UTF_8).size)
-            val pfd = openWritableDescriptor(context, uri) ?: return
-            pfd.use { fd ->
-                FileOutputStream(fd.fileDescriptor).use { fos ->
-                    fos.write(line.toByteArray(Charsets.UTF_8))
-                    fos.flush()
-                }
-            }
+            appendToFile(file, line)
+            cacheLastSuccessPath(context, file.absolutePath)
         }.onFailure { err ->
-            Log.e(TAG, "Failed to append log", err)
+            Log.e(TAG, "Failed to append log to ${file.absolutePath}", err)
         }
     }
 
-    private fun openWritableDescriptor(
-        context: Context,
-        uri: android.net.Uri
-    ): android.os.ParcelFileDescriptor? {
-        val resolver = context.contentResolver
-        return runCatching { resolver.openFileDescriptor(uri, "wa") }.getOrNull()
-            ?: runCatching { resolver.openFileDescriptor(uri, "rw") }.getOrNull()
-            ?: runCatching { resolver.openFileDescriptor(uri, "w") }.getOrNull()
+    fun logPathForUi(context: Context): String {
+        val cached = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_LAST_SUCCESS_PATH, null)
+        if (!cached.isNullOrBlank()) return cached
+        return expectedPublicPath()
     }
 
-    private fun rotateIfNeeded(context: Context, sourceUri: android.net.Uri, incomingSize: Int) {
-        val sourcePfd = context.contentResolver.openFileDescriptor(sourceUri, "r") ?: return
-        val currentSize = sourcePfd.use { it.statSize }
-        if (currentSize < 0 || currentSize + incomingSize <= MAX_LOG_SIZE_BYTES) return
+    private fun expectedPublicPath(): String {
+        val docs = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        return File(File(docs, DIR_NAME), FILE_NAME).absolutePath
+    }
+
+    private fun publicDocumentsLogFile(): File {
+        val docs = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        return File(File(docs, DIR_NAME), FILE_NAME)
+    }
+
+    private fun appendToFile(file: File, line: String) {
+        file.parentFile?.let { parent ->
+            if (!parent.exists() && !parent.mkdirs()) {
+                error("Failed to create directory: ${parent.absolutePath}")
+            }
+        }
+
+        rotateIfNeeded(file, line.toByteArray(Charsets.UTF_8).size)
+        file.appendText(line, Charsets.UTF_8)
+    }
+
+    private fun rotateIfNeeded(source: File, incomingSize: Int) {
+        if (!source.exists()) return
+        if (source.length() + incomingSize <= MAX_LOG_SIZE_BYTES) return
 
         val stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.US).format(
             Instant.now().atZone(ZoneId.systemDefault())
         )
-        val archiveName = "FYTCustomService-acc-$stamp.log"
-        val archiveUri = createLogUri(context, archiveName) ?: return
-
-        val input = context.contentResolver.openFileDescriptor(sourceUri, "r") ?: return
-        val output = context.contentResolver.openFileDescriptor(archiveUri, "w") ?: return
-        input.use { src ->
-            output.use { dst ->
-                FileInputStream(src.fileDescriptor).use { fis ->
-                    FileOutputStream(dst.fileDescriptor).use { fos ->
-                        fis.copyTo(fos)
-                        fos.flush()
-                    }
-                }
-            }
-        }
-
-        val truncatePfd = context.contentResolver.openFileDescriptor(sourceUri, "rw") ?: return
-        truncatePfd.use { pfd ->
-            FileOutputStream(pfd.fileDescriptor).channel.use { ch ->
-                ch.truncate(0L)
-            }
-        }
+        val archive = File(source.parentFile, "FYTCustomService-acc-$stamp.log")
+        source.copyTo(archive, overwrite = true)
+        source.writeText("", Charsets.UTF_8)
     }
 
-    private fun getOrCreateLogUri(context: Context): android.net.Uri? {
-        val resolver = context.contentResolver
-        val cachedUriText = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_ACTIVE_LOG_URI, null)
-        if (!cachedUriText.isNullOrBlank()) {
-            val cachedUri = android.net.Uri.parse(cachedUriText)
-            val pfd = resolver.openFileDescriptor(cachedUri, "r")
-            if (pfd != null) {
-                pfd.close()
-                return cachedUri
-            }
-        }
-
-        val found = findExistingLogUri(context, FILE_NAME)
-        if (found != null) {
-            cacheLogUri(context, found)
-            return found
-        }
-
-        val created = createLogUri(context, FILE_NAME)
-        if (created != null) {
-            cacheLogUri(context, created)
-        }
-        return created
-    }
-
-    private fun findExistingLogUri(context: Context, fileName: String): android.net.Uri? {
-        val resolver = context.contentResolver
-        val projection = arrayOf(MediaStore.Files.FileColumns._ID)
-        val selection =
-            "${MediaStore.Files.FileColumns.DISPLAY_NAME}=? AND ${MediaStore.Files.FileColumns.RELATIVE_PATH}=?"
-        val selectionArgs = arrayOf(fileName, RELATIVE_PATH)
-        resolver.query(
-            MediaStore.Files.getContentUri("external"),
-            projection,
-            selection,
-            selectionArgs,
-            null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID))
-                return ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), id)
-            }
-        }
-        return null
-    }
-
-    private fun createLogUri(context: Context, fileName: String): android.net.Uri? {
-        val resolver = context.contentResolver
-        val values = ContentValues().apply {
-            put(MediaStore.Files.FileColumns.DISPLAY_NAME, fileName)
-            put(MediaStore.Files.FileColumns.MIME_TYPE, "text/plain")
-            put(MediaStore.Files.FileColumns.RELATIVE_PATH, RELATIVE_PATH)
-            put(MediaStore.Files.FileColumns.IS_PENDING, 0)
-        }
-        val fileUri = resolver.insert(MediaStore.Files.getContentUri("external"), values)
-        if (fileUri != null) return fileUri
-
-        val dlValues = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-            put(MediaStore.Downloads.MIME_TYPE, "text/plain")
-            put(MediaStore.Downloads.RELATIVE_PATH, RELATIVE_PATH)
-            put(MediaStore.Downloads.IS_PENDING, 0)
-        }
-        return resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, dlValues)
-    }
-
-    private fun cacheLogUri(context: Context, uri: android.net.Uri) {
+    private fun cacheLastSuccessPath(context: Context, absolutePath: String) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putString(KEY_ACTIVE_LOG_URI, uri.toString())
+            .putString(KEY_LAST_SUCCESS_PATH, absolutePath)
             .apply()
     }
 }

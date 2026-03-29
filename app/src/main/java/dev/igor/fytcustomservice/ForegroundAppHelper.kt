@@ -12,23 +12,48 @@ object ForegroundAppHelper {
     fun getForegroundPackage(context: Context, excludePackage: String? = null): String? {
         val usageStatsManager = context.getSystemService(UsageStatsManager::class.java)
         val now = System.currentTimeMillis()
-        val events = usageStatsManager.queryEvents(now - 15_000, now)
         val event = UsageEvents.Event()
-        var lastForeground: String? = null
+        var bestPackage: String? = null
+        var bestTs = 0L
 
+        // Prefer event-based foreground detection first.
+        val events = usageStatsManager.queryEvents(now - EVENT_LOOKBACK_MS, now)
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
-                if (!event.packageName.isNullOrBlank()) {
-                    lastForeground = event.packageName
-                }
+            val isForegroundEvent =
+                event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
+                    event.eventType == UsageEvents.Event.ACTIVITY_RESUMED
+            val pkg = event.packageName
+            if (!isForegroundEvent || pkg.isNullOrBlank()) continue
+            if (!excludePackage.isNullOrBlank() && pkg == excludePackage) continue
+            if (event.timeStamp >= bestTs) {
+                bestTs = event.timeStamp
+                bestPackage = pkg
             }
         }
-
-        if (!excludePackage.isNullOrBlank() && lastForeground == excludePackage) {
-            return null
+        if (!bestPackage.isNullOrBlank()) {
+            return bestPackage
         }
-        return lastForeground
+
+        // Fallback for cases where no recent foreground transition event exists.
+        val stats = usageStatsManager.queryUsageStats(
+            UsageStatsManager.INTERVAL_DAILY,
+            now - STATS_LOOKBACK_MS,
+            now
+        )
+        var fallbackPackage: String? = null
+        var fallbackTs = 0L
+        stats?.forEach { stat ->
+            val pkg = stat.packageName ?: return@forEach
+            if (pkg.isBlank()) return@forEach
+            if (!excludePackage.isNullOrBlank() && pkg == excludePackage) return@forEach
+            val ts = stat.lastTimeUsed
+            if (ts >= fallbackTs) {
+                fallbackTs = ts
+                fallbackPackage = pkg
+            }
+        }
+        return fallbackPackage
     }
 
     fun launchPackage(context: Context, packageName: String): Boolean {
@@ -47,4 +72,7 @@ object ForegroundAppHelper {
             false
         }
     }
+
+    private const val EVENT_LOOKBACK_MS = 30 * 60 * 1000L
+    private const val STATS_LOOKBACK_MS = 24 * 60 * 60 * 1000L
 }

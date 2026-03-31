@@ -1,6 +1,7 @@
 package dev.igor.fytcustomservice
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -19,6 +20,10 @@ class StartupActivity : AppCompatActivity() {
             ContextCompat.startForegroundService(this, intent)
         }
 
-        finish()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            finishAndRemoveTask()
+        } else {
+            finish()
+        }
     }
 }

@@ -3,7 +3,8 @@ package dev.igor.fytcustomservice
 import android.content.Context
 
 data class SavedMediaState(
-    val packageName: String
+    val packageName: String,
+    val playerState: String = "unknown"
 )
 
 object MediaStateStore {

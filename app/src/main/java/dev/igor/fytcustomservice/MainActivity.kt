@@ -500,7 +500,10 @@ class MainActivity : AppCompatActivity() {
     private fun refreshAccEventTimestamps() {
         val lastOn = AccEventTimeFormatter.formatForUi(AccEventStateStore.getLastAccOnTimestamp(this))
         val lastOff = AccEventTimeFormatter.formatForUi(AccEventStateStore.getLastAccOffTimestamp(this))
-        val lastSavedPlayer = buildPlayerLabel(AccEventStateStore.getLastSavedPlayer(this))
+        val lastSavedPlayer = buildSavedPlayerLabel(
+            AccEventStateStore.getLastSavedPlayer(this),
+            AccEventStateStore.getLastSavedPlayerState(this)
+        )
         val lastStartedPlayer = buildPlayerLabel(AccEventStateStore.getLastStartedPlayer(this))
         val lastActiveBeforeTargets = buildPlayerLabel(
             AccEventStateStore.getLastActiveAppBeforeStartupTargets(this)
@@ -517,6 +520,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildPlayerLabel(playerPackage: String?): String {
         return playerPackage.orEmpty().ifBlank { "-" }
+    }
+
+    private fun buildSavedPlayerLabel(playerPackage: String?, playerState: String?): String {
+        val pkg = buildPlayerLabel(playerPackage)
+        if (pkg == "-") return pkg
+        val state = playerState.orEmpty().ifBlank { "unknown" }
+        return "$pkg ($state)"
     }
 
     private class TargetManageAdapter(

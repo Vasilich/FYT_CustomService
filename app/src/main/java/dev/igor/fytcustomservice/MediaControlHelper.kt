@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.media.session.MediaController
+import android.media.session.PlaybackState
 import android.media.session.MediaSessionManager
 import android.util.Log
 import android.view.KeyEvent
@@ -18,7 +19,8 @@ object MediaControlHelper {
 
         val active = controllers.first()
         return SavedMediaState(
-            packageName = active.packageName
+            packageName = active.packageName,
+            playerState = mapPlaybackState(active.playbackState?.state)
         )
     }
 
@@ -91,6 +93,24 @@ object MediaControlHelper {
         } catch (se: SecurityException) {
             Log.w(TAG, "Notification access is required to inspect active media sessions", se)
             emptyList()
+        }
+    }
+
+    private fun mapPlaybackState(state: Int?): String {
+        return when (state) {
+            PlaybackState.STATE_PLAYING -> "playing"
+            PlaybackState.STATE_PAUSED -> "paused"
+            PlaybackState.STATE_STOPPED -> "stopped"
+            PlaybackState.STATE_BUFFERING -> "buffering"
+            PlaybackState.STATE_CONNECTING -> "connecting"
+            PlaybackState.STATE_SKIPPING_TO_PREVIOUS -> "skipping_prev"
+            PlaybackState.STATE_SKIPPING_TO_NEXT -> "skipping_next"
+            PlaybackState.STATE_SKIPPING_TO_QUEUE_ITEM -> "skipping_queue"
+            PlaybackState.STATE_FAST_FORWARDING -> "fast_forwarding"
+            PlaybackState.STATE_REWINDING -> "rewinding"
+            PlaybackState.STATE_ERROR -> "error"
+            PlaybackState.STATE_NONE, null -> "none"
+            else -> "unknown"
         }
     }
 }

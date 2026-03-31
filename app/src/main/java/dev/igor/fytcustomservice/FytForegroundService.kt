@@ -67,6 +67,7 @@ class FytForegroundService : Service() {
             updateStatus("ACCOFF: no active media session")
             AccEventLog.append(this, "ACCOFF no active media session detected")
             AccEventStateStore.setLastSavedPlayer(this, null)
+            AccEventStateStore.setLastSavedPlayerState(this, null)
             return
         }
 
@@ -74,12 +75,15 @@ class FytForegroundService : Service() {
             context = this,
             packageName = snapshot.packageName
         )
+        val playerStateBeforePause = snapshot.playerState
         AccEventStateStore.setLastSavedPlayer(this, snapshot.packageName)
+        AccEventStateStore.setLastSavedPlayerState(this, playerStateBeforePause)
 
         MediaControlHelper.sendPause(this, snapshot.packageName)
         AccEventLog.append(
             this,
-            "ACCOFF activePlayer=${snapshot.packageName} persisted=$persisted pauseSent=true"
+            "ACCOFF activePlayer=${snapshot.packageName} stateBeforePause=$playerStateBeforePause " +
+                "persisted=$persisted pauseSent=true"
         )
 
         Log.i(

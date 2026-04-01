@@ -160,6 +160,11 @@ Logged details include:
 - Previous foreground restore attempt/result.
 
 ## Changelog
+### 2026-04-01
+- Updated boot receiver behavior:
+  - `android.intent.action.BOOT_COMPLETED` now triggers `ACTION_ACC_ON` (same logic path as ACCON handling).
+  - `android.intent.action.LOCKED_BOOT_COMPLETED` and `android.intent.action.MY_PACKAGE_REPLACED` keep using normal `ACTION_START`.
+
 ### 2026-03-29 (update 2)
 - Logging now writes to a single required file path only:
   - `Documents/FYTService/FYTCustomService-acc.log`

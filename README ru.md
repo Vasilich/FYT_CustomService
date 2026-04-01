@@ -156,6 +156,11 @@ adb shell am broadcast \
 - Попытка/результат восстановления предыдущего foreground-приложения.
 
 ## Changelog
+### 2026-04-01
+- Обновлено поведение boot receiver:
+  - `android.intent.action.BOOT_COMPLETED` теперь запускает `ACTION_ACC_ON` (тот же путь логики, что и ACCON).
+  - `android.intent.action.LOCKED_BOOT_COMPLETED` и `android.intent.action.MY_PACKAGE_REPLACED` оставлены на обычном `ACTION_START`.
+
 ### 2026-03-29 (update 2)
 - Логирование теперь пишет только в один требуемый путь:
   - `Documents/FYTService/FYTCustomService-acc.log`

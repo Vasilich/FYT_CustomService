@@ -11,14 +11,19 @@ class BootReceiver : BroadcastReceiver() {
         WatchdogScheduler.ensureScheduled(context)
         if (!ServiceSettings.autoStartOnBoot(context)) return
 
-        val shouldStart = intent.action == Intent.ACTION_BOOT_COMPLETED ||
-            intent.action == Intent.ACTION_LOCKED_BOOT_COMPLETED ||
-            intent.action == Intent.ACTION_MY_PACKAGE_REPLACED
+        val action = intent.action
+        val shouldStart = action == Intent.ACTION_BOOT_COMPLETED ||
+            action == Intent.ACTION_LOCKED_BOOT_COMPLETED ||
+            action == Intent.ACTION_MY_PACKAGE_REPLACED
 
         if (!shouldStart) return
 
         val serviceIntent = Intent(context, FytForegroundService::class.java).apply {
-            action = FytForegroundService.ACTION_START
+            this.action = if (action == Intent.ACTION_BOOT_COMPLETED) {
+                FytForegroundService.ACTION_ACC_ON
+            } else {
+                FytForegroundService.ACTION_START
+            }
         }
         ContextCompat.startForegroundService(context, serviceIntent)
     }

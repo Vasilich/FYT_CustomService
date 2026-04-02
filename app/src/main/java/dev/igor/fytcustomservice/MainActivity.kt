@@ -13,6 +13,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ListView
@@ -156,7 +157,14 @@ class MainActivity : AppCompatActivity() {
         val btnMoveUp = view.findViewById<Button>(R.id.btnMoveUpTarget)
         val btnMoveDown = view.findViewById<Button>(R.id.btnMoveDownTarget)
 
-        val adapter = TargetManageAdapter(this, workingTargets)
+        val adapter = TargetManageAdapter(
+            activity = this,
+            targets = workingTargets
+        ) { index, enabled ->
+            if (index in workingTargets.indices) {
+                workingTargets[index] = workingTargets[index].copy(enabled = enabled)
+            }
+        }
         listView.adapter = adapter
         listView.choiceMode = ListView.CHOICE_MODE_SINGLE
 
@@ -531,7 +539,8 @@ class MainActivity : AppCompatActivity() {
 
     private class TargetManageAdapter(
         activity: MainActivity,
-        targets: List<AccOnStartupTarget>
+        targets: List<AccOnStartupTarget>,
+        private val onEnabledChanged: (index: Int, enabled: Boolean) -> Unit
     ) : ArrayAdapter<AccOnStartupTarget>(activity, 0, targets) {
         private val inflater = LayoutInflater.from(activity)
         private val pm = activity.packageManager
@@ -544,6 +553,7 @@ class MainActivity : AppCompatActivity() {
             val iconView = view.findViewById<ImageView>(R.id.iconApp)
             val titleView = view.findViewById<TextView>(R.id.textAppTitle)
             val subtitleView = view.findViewById<TextView>(R.id.textAppSubtitle)
+            val enabledCheck = view.findViewById<CheckBox>(R.id.checkTargetEnabled)
 
             val appLabel = runCatching {
                 val appInfo = pm.getApplicationInfo(target.packageName, 0)
@@ -556,11 +566,23 @@ class MainActivity : AppCompatActivity() {
 
             iconView.setImageDrawable(icon)
             titleView.text = appLabel
+            val disabledMark = if (target.enabled) "" else " [disabled]"
             subtitleView.text =
-                "${target.activityName ?: "[default launcher activity]"} (${target.pauseAfterMs}ms)"
+                "${target.activityName ?: "[default launcher activity]"} (${target.pauseAfterMs}ms)$disabledMark"
             val selected = position == selectedIndex
             view.isActivated = selected
             view.isSelected = selected
+            val alpha = if (target.enabled) 1.0f else 0.6f
+            iconView.alpha = alpha
+            titleView.alpha = alpha
+            subtitleView.alpha = alpha
+
+            enabledCheck.setOnCheckedChangeListener(null)
+            enabledCheck.isChecked = target.enabled
+            enabledCheck.setOnCheckedChangeListener { _, isChecked ->
+                onEnabledChanged(position, isChecked)
+                notifyDataSetChanged()
+            }
 
             return view
         }

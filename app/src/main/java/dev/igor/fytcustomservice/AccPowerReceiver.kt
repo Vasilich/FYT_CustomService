@@ -3,6 +3,8 @@ package dev.igor.fytcustomservice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.os.UserManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 
@@ -26,11 +28,16 @@ class AccPowerReceiver : BroadcastReceiver() {
             "AccPowerReceiver received action=$receivedAction and forwarding to service"
         )
 
-        val serviceIntent = Intent(context, FytForegroundService::class.java).apply {
+        val startContext = resolveStartContext(context)
+        val serviceIntent = Intent(startContext, FytForegroundService::class.java).apply {
             action = serviceAction
+            putExtra(
+                FytForegroundService.EXTRA_TRIGGER_SOURCE,
+                FytForegroundService.TRIGGER_SOURCE_ACC_ON_INTENT
+            )
         }
         try {
-            ContextCompat.startForegroundService(context, serviceIntent)
+            ContextCompat.startForegroundService(startContext, serviceIntent)
         } catch (t: Throwable) {
             Log.w(
                 TAG,
@@ -41,7 +48,7 @@ class AccPowerReceiver : BroadcastReceiver() {
                 context,
                 "AccPowerReceiver startForegroundService failed action=$receivedAction reason=${t.javaClass.simpleName}; fallback startService"
             )
-            runCatching { context.startService(serviceIntent) }
+            runCatching { startContext.startService(serviceIntent) }
                 .onFailure { err ->
                     Log.e(TAG, "startService fallback failed for action=$receivedAction", err)
                     AccEventLog.append(
@@ -56,5 +63,15 @@ class AccPowerReceiver : BroadcastReceiver() {
         const val ACTION_ACC_ON = "com.fyt.boot.ACCON"
         const val ACTION_ACC_OFF = "com.fyt.boot.ACCOFF"
         private const val TAG = "AccPowerReceiver"
+
+        private fun resolveStartContext(context: Context): Context {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return context
+            val um = context.getSystemService(UserManager::class.java)
+            return if (um != null && !um.isUserUnlocked) {
+                context.createDeviceProtectedStorageContext()
+            } else {
+                context
+            }
+        }
     }
 }

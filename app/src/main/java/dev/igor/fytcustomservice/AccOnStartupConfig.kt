@@ -12,7 +12,8 @@ import org.json.JSONObject
 data class AccOnStartupTarget(
     val packageName: String,
     val activityName: String?,
-    val pauseAfterMs: Int
+    val pauseAfterMs: Int,
+    val enabled: Boolean = true
 )
 
 data class InstalledAppEntry(
@@ -46,7 +47,8 @@ object AccOnStartupStore {
                 if (pkg.isBlank()) continue
                 val pauseMs = obj.optInt("pauseAfterMs", DEFAULT_PAUSE_MS)
                     .coerceIn(MIN_PAUSE_MS, MAX_PAUSE_MS)
-                out += AccOnStartupTarget(pkg, activity, pauseMs)
+                val enabled = obj.optBoolean("enabled", true)
+                out += AccOnStartupTarget(pkg, activity, pauseMs, enabled)
             }
             out
         }.getOrDefault(emptyList())
@@ -60,6 +62,7 @@ object AccOnStartupStore {
                     .put("packageName", target.packageName)
                     .put("activityName", target.activityName ?: "")
                     .put("pauseAfterMs", target.pauseAfterMs.coerceIn(MIN_PAUSE_MS, MAX_PAUSE_MS))
+                    .put("enabled", target.enabled)
             )
         }
         prefs(context).edit().putString(KEY_TARGETS_JSON, arr.toString()).apply()

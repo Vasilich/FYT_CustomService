@@ -28,6 +28,9 @@ class FytForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         WatchdogScheduler.ensureScheduled(this)
+        val triggerSource = intent?.getStringExtra(EXTRA_TRIGGER_SOURCE).orEmpty().ifBlank {
+            TRIGGER_SOURCE_UNKNOWN
+        }
         when (intent?.action) {
             ACTION_STOP -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -42,9 +45,20 @@ class FytForegroundService : Service() {
             }
 
             ACTION_ACC_OFF -> handleAccOff()
-            ACTION_ACC_ON -> handleAccOn()
+            ACTION_ACC_ON -> handleAccOn(triggerSource)
             ACTION_RESET_STATE -> handleResetState()
-            ACTION_START, null -> Unit
+            ACTION_START -> {
+                if (triggerSource == TRIGGER_SOURCE_FYT_STARTUP_MANAGER) {
+                    AccEventLog.append(
+                        this,
+                        "ACTION_START from FYT startup manager; running ACCON-equivalent startup flow"
+                    )
+                    handleAccOn(triggerSource)
+                } else {
+                    AccEventLog.append(this, "ACTION_START received source=$triggerSource")
+                }
+            }
+            null -> AccEventLog.append(this, "Service restarted with null action source=$triggerSource")
         }
         return START_STICKY
     }
@@ -93,9 +107,9 @@ class FytForegroundService : Service() {
         updateStatus("ACCOFF: ${snapshot.packageName} saved, PAUSE sent")
     }
 
-    private fun handleAccOn() {
+    private fun handleAccOn(triggerSource: String) {
         AccEventStateStore.setLastAccOnTimestamp(this)
-        AccEventLog.append(this, "RECEIVED com.fyt.boot.ACCON")
+        AccEventLog.append(this, "RECEIVED ACCON source=$triggerSource")
 
         val foregroundBeforeTargets = ForegroundAppHelper.getForegroundPackage(
             context = this,
@@ -111,7 +125,7 @@ class FytForegroundService : Service() {
         if (saved == null) {
             updateStatus("ACCON: no saved player, running startup targets")
             AccEventLog.append(this, "ACCON no saved ACCOFF player state; running startup targets only")
-            runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets) {
+            runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
                 updateStatus("ACCON done: startup targets only")
             }
             return
@@ -130,7 +144,7 @@ class FytForegroundService : Service() {
                 this,
                 "ACCON saved player launch failed; running startup targets anyway"
             )
-            runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets) {
+            runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
                 updateStatus("ACCON done: startup targets only (saved launch failed)")
             }
             return
@@ -148,7 +162,7 @@ class FytForegroundService : Service() {
             Log.i(TAG, "ACCON PLAY sent to ${saved.packageName}")
             AccEventLog.append(this, "ACCON sent PLAY to saved player ${saved.packageName} (always)")
 
-            runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets) {
+            runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
                 MediaStateStore.clearAccOffState(this)
                 AccEventLog.append(this, "ACCON cleared saved ACCOFF player state")
                 updateStatus("ACCON done: ${saved.packageName}")
@@ -159,8 +173,13 @@ class FytForegroundService : Service() {
         handler.postDelayed(run, delayMs.toLong())
     }
 
-    private fun runConfiguredStartupTargets(restorePackage: String?, onDone: () -> Unit) {
+    private fun runConfiguredStartupTargets(
+        restorePackage: String?,
+        triggerSource: String,
+        onDone: () -> Unit
+    ) {
         val targets = AccOnStartupStore.load(this)
+        AccEventLog.append(this, "STARTUP_LIST triggerSource=$triggerSource")
         if (targets.isEmpty()) {
             AccEventLog.append(this, "ACCON startup targets: none configured")
             restoreForegroundPackage(restorePackage)
@@ -178,6 +197,15 @@ class FytForegroundService : Service() {
             }
 
             val target = targets[index]
+            if (!target.enabled) {
+                AccEventLog.append(
+                    this,
+                    "ACCON target[$index] skipped package=${target.packageName} activity=${target.activityName ?: "[default]"} " +
+                        "reason=disabled"
+                )
+                scheduleNext(index + 1)
+                return
+            }
             val alreadyRunning = StartupTargetLauncher.isPackageLikelyRunning(this, target.packageName)
             if (alreadyRunning) {
                 Log.i(
@@ -324,6 +352,13 @@ class FytForegroundService : Service() {
 
         const val EXTRA_COMMAND_CODE = "extra_command_code"
         const val EXTRA_ARG1 = "extra_arg1"
+        const val EXTRA_TRIGGER_SOURCE = "extra_trigger_source"
+
+        const val TRIGGER_SOURCE_ACC_ON_INTENT = "acc_on_intent"
+        const val TRIGGER_SOURCE_BOOT_COMPLETED = "boot_completed"
+        const val TRIGGER_SOURCE_FYT_STARTUP_MANAGER = "fyt_startup_manager"
+        const val TRIGGER_SOURCE_BOOT_MISC = "boot_misc"
+        private const val TRIGGER_SOURCE_UNKNOWN = "unknown"
 
         private const val TAG = "FytForegroundService"
         private const val CHANNEL_ID = "fyt_custom_service_channel"

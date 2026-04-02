@@ -16,6 +16,10 @@ class StartupActivity : AppCompatActivity() {
         if (!ServiceRuntimeHelper.isForegroundServiceRunning(this)) {
             val intent = Intent(this, FytForegroundService::class.java).apply {
                 action = FytForegroundService.ACTION_START
+                putExtra(
+                    FytForegroundService.EXTRA_TRIGGER_SOURCE,
+                    FytForegroundService.TRIGGER_SOURCE_FYT_STARTUP_MANAGER
+                )
             }
             ContextCompat.startForegroundService(this, intent)
         }

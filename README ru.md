@@ -92,6 +92,7 @@ adb shell am broadcast \
 - Имя пакета
 - Необязательное имя activity (пусто = activity по умолчанию у пакета)
 - Пауза после запуска (мс)
+- Флаг включения (checkbox в редакторе, сохраняется)
 
 Цели сохраняются в `SharedPreferences` (JSON) и автоматически загружаются при ACCON.
 
@@ -99,6 +100,7 @@ adb shell am broadcast \
 - Один прокручиваемый список (без второго экрана управления).
 - Одиночный выбор элемента.
 - Действия: Add / Edit / Delete / Move up / Move down.
+- Быстрое включение/выключение цели через checkbox в строке (без удаления из списка).
 - Для Delete требуется подтверждение.
 - Add/Edit сценарий:
   1. Выбор приложения.
@@ -156,6 +158,15 @@ adb shell am broadcast \
 - Попытка/результат восстановления предыдущего foreground-приложения.
 
 ## Changelog
+### 2026-04-02
+- Добавлен checkbox включения/выключения для каждой цели в редакторе `ACC ON startup targets`.
+- Состояние checkbox сохраняется в persistent storage списка целей.
+- В ACCON отключённые цели теперь пропускаются с логом `reason=disabled`.
+- Добавлено логирование причины запуска startup list:
+  - `acc_on_intent`
+  - `boot_completed`
+  - `fyt_startup_manager`
+
 ### 2026-04-01
 - Обновлено поведение boot receiver:
   - `android.intent.action.BOOT_COMPLETED` теперь запускает `ACTION_ACC_ON` (тот же путь логики, что и ACCON).

@@ -96,6 +96,7 @@ Each target stores:
 - Package name
 - Optional activity name (blank = package default launcher activity)
 - Pause after start (ms)
+- Enabled flag (checkbox in editor, persisted)
 
 Targets are persisted via `SharedPreferences` JSON and loaded automatically on ACCON.
 
@@ -103,6 +104,7 @@ Editor behavior:
 - Single scrollable list (no secondary manage list).
 - Single-selection model.
 - Actions: Add / Edit / Delete / Move up / Move down.
+- Quick enable/disable via checkbox per row (without removing target).
 - Delete requires confirmation.
 - Add/Edit flow:
   1. Select app.
@@ -160,6 +162,15 @@ Logged details include:
 - Previous foreground restore attempt/result.
 
 ## Changelog
+### 2026-04-02
+- Added per-target enable/disable checkbox in `ACC ON startup targets` editor.
+- Checkbox state is persisted in startup-target storage.
+- ACCON startup execution now skips disabled targets and logs `reason=disabled`.
+- Added startup-list trigger-source logging so list start reason is visible in logs:
+  - `acc_on_intent`
+  - `boot_completed`
+  - `fyt_startup_manager`
+
 ### 2026-04-01
 - Updated boot receiver behavior:
   - `android.intent.action.BOOT_COMPLETED` now triggers `ACTION_ACC_ON` (same logic path as ACCON handling).

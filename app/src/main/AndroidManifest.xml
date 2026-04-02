@@ -60,6 +60,7 @@
 
         <service
             android:name=".FytForegroundService"
+            android:directBootAware="true"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
@@ -88,7 +89,7 @@
             android:directBootAware="true"
             android:enabled="true"
             android:exported="true">
-            <intent-filter>
+            <intent-filter android:priority="1000">
                 <action android:name="com.fyt.boot.ACCON" />
                 <action android:name="com.fyt.boot.ACCOFF" />
             </intent-filter>

@@ -122,10 +122,18 @@ class MainActivity : AppCompatActivity() {
         val actionEdit = view.findViewById<EditText>(R.id.editAction)
         val autoStartSwitch = view.findViewById<Switch>(R.id.switchAutostart)
         val accOnDelayEdit = view.findViewById<EditText>(R.id.editAccOnDelayMs)
+        val fallbackPlayerEdit = view.findViewById<EditText>(R.id.editFallbackPlayerPackage)
+        val pickFallbackPlayerBtn = view.findViewById<Button>(R.id.btnPickFallbackPlayer)
 
         actionEdit.setText(ServiceSettings.commandAction(this))
         autoStartSwitch.isChecked = ServiceSettings.autoStartOnBoot(this)
         accOnDelayEdit.setText(ServiceSettings.accOnPlayDelayMs(this).toString())
+        fallbackPlayerEdit.setText(ServiceSettings.accOnFallbackPlayerPackage(this).orEmpty())
+        pickFallbackPlayerBtn.setOnClickListener {
+            showAppPickerForTarget(fallbackPlayerEdit.text?.toString().orEmpty()) { pkg ->
+                fallbackPlayerEdit.setText(pkg)
+            }
+        }
 
         AlertDialog.Builder(this)
             .setTitle(R.string.settings_title)
@@ -140,7 +148,8 @@ class MainActivity : AppCompatActivity() {
                         ServiceSettings.DEFAULT_COMMAND_ACTION
                     },
                     autoStartOnBoot = autoStartSwitch.isChecked,
-                    accOnPlayDelayMs = delayMs
+                    accOnPlayDelayMs = delayMs,
+                    accOnFallbackPlayerPackage = fallbackPlayerEdit.text?.toString()
                 )
             }
             .setNegativeButton(R.string.cancel, null)

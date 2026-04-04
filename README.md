@@ -16,12 +16,14 @@
   - Per-target pause after launch.
   - Optional default launcher activity (no explicit activity required).
   - Skip target if package is already running.
+  - Per-target enabled checkbox (persisted).
 - Provides a minimal GUI to:
   - Start/stop the service.
   - Show service status (`running`/`stopped`) and last received ACCON/ACCOFF timestamps.
   - Change command action string.
   - Toggle auto-start on boot.
   - Set ACCON play delay in milliseconds (500-10000 ms).
+  - Configure fallback player package for ACCON when no saved player exists.
   - Configure ACCON startup targets.
 - Schedules a watchdog worker (15-minute periodic check) to restart the service if killed.
 - Writes ACC event logs to public Documents folder (`Documents/FYTService/FYTCustomService-acc.log`).
@@ -78,6 +80,7 @@ Receiver robustness notes:
 
 ACCON flow:
 1. Load saved package from ACCOFF.
+   - If no saved package exists and fallback player is configured, launch fallback player, wait ACCON delay, send `PLAY`.
 2. Capture current foreground app package.
 3. Start saved player app.
 4. Wait configured delay (`ACC ON play delay`, default `2000` ms).
@@ -105,6 +108,7 @@ Editor behavior:
 - Single-selection model.
 - Actions: Add / Edit / Delete / Move up / Move down.
 - Quick enable/disable via checkbox per row (without removing target).
+- App picker lists app icon, app name, and package.
 - Delete requires confirmation.
 - Add/Edit flow:
   1. Select app.
@@ -162,6 +166,12 @@ Logged details include:
 - Previous foreground restore attempt/result.
 
 ## Changelog
+### 2026-04-04
+- Added setting: fallback player package used on ACCON when no saved ACCOFF player exists.
+- Fallback flow now mirrors normal saved-player ACCON behavior: launch player, wait configured delay, send `PLAY`.
+- Settings dialog includes fallback-player app picker.
+- Documented that app picker shows app icons.
+
 ### 2026-04-02
 - Added per-target enable/disable checkbox in `ACC ON startup targets` editor.
 - Checkbox state is persisted in startup-target storage.

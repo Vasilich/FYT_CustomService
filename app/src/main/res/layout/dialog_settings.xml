@@ -37,4 +37,24 @@
         android:hint="2000"
         android:inputType="number" />
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Fallback player package if no last player on ACCON" />
+
+    <EditText
+        android:id="@+id/editFallbackPlayerPackage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="com.example.player"
+        android:inputType="text" />
+
+    <Button
+        android:id="@+id/btnPickFallbackPlayer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Pick fallback player app" />
+
 </LinearLayout>

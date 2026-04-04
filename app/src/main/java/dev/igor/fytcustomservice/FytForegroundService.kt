@@ -123,11 +123,49 @@ class FytForegroundService : Service() {
 
         val saved = MediaStateStore.loadAccOffState(this)
         if (saved == null) {
-            updateStatus("ACCON: no saved player, running startup targets")
-            AccEventLog.append(this, "ACCON no saved ACCOFF player state; running startup targets only")
-            runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
-                updateStatus("ACCON done: startup targets only")
+            val fallbackPlayerPackage = ServiceSettings.accOnFallbackPlayerPackage(this)
+            if (fallbackPlayerPackage.isNullOrBlank()) {
+                updateStatus("ACCON: no saved player, running startup targets")
+                AccEventLog.append(this, "ACCON no saved ACCOFF player state; running startup targets only")
+                runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
+                    updateStatus("ACCON done: startup targets only")
+                }
+                return
             }
+
+            val fallbackLaunched = ForegroundAppHelper.launchPackage(this, fallbackPlayerPackage)
+            AccEventLog.append(
+                this,
+                "ACCON no saved player; fallbackPlayer=$fallbackPlayerPackage launchResult=$fallbackLaunched"
+            )
+            if (!fallbackLaunched) {
+                updateStatus("ACCON: fallback launch failed, running startup targets")
+                runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
+                    updateStatus("ACCON done: startup targets only (fallback launch failed)")
+                }
+                return
+            }
+
+            AccEventStateStore.setLastStartedPlayer(this, fallbackPlayerPackage)
+            val delayMs = ServiceSettings.accOnPlayDelayMs(this)
+            updateStatus("ACCON: launched fallback $fallbackPlayerPackage, waiting ${delayMs}ms")
+
+            pendingAccOnRunnable?.let(handler::removeCallbacks)
+            pendingAccOnRunnable = null
+            clearPendingStartupRunnables()
+            val run = Runnable {
+                MediaControlHelper.sendPlay(this, fallbackPlayerPackage)
+                AccEventLog.append(
+                    this,
+                    "ACCON sent PLAY to fallback player $fallbackPlayerPackage (no saved player)"
+                )
+                runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
+                    updateStatus("ACCON done: fallback player $fallbackPlayerPackage")
+                    pendingAccOnRunnable = null
+                }
+            }
+            pendingAccOnRunnable = run
+            handler.postDelayed(run, delayMs.toLong())
             return
         }
 

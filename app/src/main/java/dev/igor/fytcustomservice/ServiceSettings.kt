@@ -7,6 +7,7 @@ object ServiceSettings {
     private const val KEY_COMMAND_ACTION = "command_action"
     private const val KEY_AUTOSTART = "autostart_on_boot"
     private const val KEY_ACC_ON_PLAY_DELAY_MS = "acc_on_play_delay_ms"
+    private const val KEY_ACC_ON_FALLBACK_PLAYER_PACKAGE = "acc_on_fallback_player_package"
 
     const val DEFAULT_COMMAND_ACTION = "dev.igor.fytcustomservice.ACTION_COMMAND"
     const val DEFAULT_ACC_ON_PLAY_DELAY_MS = 2_000
@@ -27,6 +28,12 @@ object ServiceSettings {
         return saved.coerceIn(MIN_ACC_ON_PLAY_DELAY_MS, MAX_ACC_ON_PLAY_DELAY_MS)
     }
 
+    fun accOnFallbackPlayerPackage(context: Context): String? {
+        return prefs(context).getString(KEY_ACC_ON_FALLBACK_PLAYER_PACKAGE, null)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+    }
+
     fun parseAccOnPlayDelayMs(rawValue: String): Int {
         val parsed = rawValue.trim().toIntOrNull() ?: DEFAULT_ACC_ON_PLAY_DELAY_MS
         return parsed.coerceIn(MIN_ACC_ON_PLAY_DELAY_MS, MAX_ACC_ON_PLAY_DELAY_MS)
@@ -37,7 +44,8 @@ object ServiceSettings {
             context = context,
             commandAction = commandAction,
             autoStartOnBoot = autoStartOnBoot,
-            accOnPlayDelayMs = accOnPlayDelayMs(context)
+            accOnPlayDelayMs = accOnPlayDelayMs(context),
+            accOnFallbackPlayerPackage = accOnFallbackPlayerPackage(context)
         )
     }
 
@@ -45,7 +53,8 @@ object ServiceSettings {
         context: Context,
         commandAction: String,
         autoStartOnBoot: Boolean,
-        accOnPlayDelayMs: Int
+        accOnPlayDelayMs: Int,
+        accOnFallbackPlayerPackage: String?
     ) {
         prefs(context).edit()
             .putString(KEY_COMMAND_ACTION, commandAction)
@@ -53,6 +62,10 @@ object ServiceSettings {
             .putInt(
                 KEY_ACC_ON_PLAY_DELAY_MS,
                 accOnPlayDelayMs.coerceIn(MIN_ACC_ON_PLAY_DELAY_MS, MAX_ACC_ON_PLAY_DELAY_MS)
+            )
+            .putString(
+                KEY_ACC_ON_FALLBACK_PLAYER_PACKAGE,
+                accOnFallbackPlayerPackage?.trim()?.takeIf { it.isNotBlank() }
             )
             .apply()
     }

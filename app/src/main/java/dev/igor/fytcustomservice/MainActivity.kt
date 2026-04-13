@@ -122,16 +122,21 @@ class MainActivity : AppCompatActivity() {
         val actionEdit = view.findViewById<EditText>(R.id.editAction)
         val autoStartSwitch = view.findViewById<Switch>(R.id.switchAutostart)
         val accOnDelayEdit = view.findViewById<EditText>(R.id.editAccOnDelayMs)
-        val fallbackPlayerEdit = view.findViewById<EditText>(R.id.editFallbackPlayerPackage)
+        val fallbackPlayerIcon = view.findViewById<ImageView>(R.id.iconFallbackPlayer)
+        val fallbackPlayerNameText = view.findViewById<TextView>(R.id.textFallbackPlayerName)
         val pickFallbackPlayerBtn = view.findViewById<Button>(R.id.btnPickFallbackPlayer)
 
         actionEdit.setText(ServiceSettings.commandAction(this))
         autoStartSwitch.isChecked = ServiceSettings.autoStartOnBoot(this)
         accOnDelayEdit.setText(ServiceSettings.accOnPlayDelayMs(this).toString())
-        fallbackPlayerEdit.setText(ServiceSettings.accOnFallbackPlayerPackage(this).orEmpty())
+        var fallbackPlayerPackage = ServiceSettings.accOnFallbackPlayerPackage(this)
+        fallbackPlayerNameText.text = fallbackPlayerPackage?.let { resolveAppDisplayName(it) } ?: "-"
+        fallbackPlayerIcon.setImageDrawable(resolveAppIcon(fallbackPlayerPackage))
         pickFallbackPlayerBtn.setOnClickListener {
-            showAppPickerForTarget(fallbackPlayerEdit.text?.toString().orEmpty()) { pkg ->
-                fallbackPlayerEdit.setText(pkg)
+            showAppPickerForTarget(fallbackPlayerPackage) { pkg ->
+                fallbackPlayerPackage = pkg
+                fallbackPlayerNameText.text = resolveAppDisplayName(pkg)
+                fallbackPlayerIcon.setImageDrawable(resolveAppIcon(pkg))
             }
         }
 
@@ -149,11 +154,26 @@ class MainActivity : AppCompatActivity() {
                     },
                     autoStartOnBoot = autoStartSwitch.isChecked,
                     accOnPlayDelayMs = delayMs,
-                    accOnFallbackPlayerPackage = fallbackPlayerEdit.text?.toString()
+                    accOnFallbackPlayerPackage = fallbackPlayerPackage
                 )
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    private fun resolveAppDisplayName(packageName: String): String {
+        return runCatching {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            packageManager.getApplicationLabel(appInfo).toString().ifBlank { packageName }
+        }.getOrDefault(packageName)
+    }
+
+    private fun resolveAppIcon(packageName: String?): Drawable? {
+        if (packageName.isNullOrBlank()) {
+            return getDrawable(android.R.drawable.sym_def_app_icon)
+        }
+        return runCatching { packageManager.getApplicationIcon(packageName) }
+            .getOrElse { getDrawable(android.R.drawable.sym_def_app_icon) }
     }
 
     private fun showAccOnTargetsEditorDialog() {

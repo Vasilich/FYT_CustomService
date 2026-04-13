@@ -172,6 +172,11 @@ Logged details include:
 - Settings dialog includes fallback-player app picker.
 - Documented that app picker shows app icons.
 
+### 2026-04-14
+- Settings UI for fallback player now shows selected app **name + icon** (instead of raw package text).
+- Added project handoff snapshot file for cross-PC continuation:
+  - `CONTEXT_HANDOFF_2026-04-14.md`
+
 ### 2026-04-02
 - Added per-target enable/disable checkbox in `ACC ON startup targets` editor.
 - Checkbox state is persisted in startup-target storage.

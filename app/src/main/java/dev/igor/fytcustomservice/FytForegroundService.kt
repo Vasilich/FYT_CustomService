@@ -18,6 +18,7 @@ class FytForegroundService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var pendingAccOnRunnable: Runnable? = null
     private val pendingStartupRunnables = mutableListOf<Runnable>()
+    private val pendingRestoreRunnables = mutableListOf<Runnable>()
 
     override fun onCreate() {
         super.onCreate()
@@ -69,12 +70,14 @@ class FytForegroundService : Service() {
         pendingAccOnRunnable?.let(handler::removeCallbacks)
         pendingAccOnRunnable = null
         clearPendingStartupRunnables()
+        clearPendingRestoreRunnables()
         super.onDestroy()
     }
 
     private fun handleAccOff() {
         AccEventStateStore.setLastAccOffTimestamp(this)
         AccEventLog.append(this, "RECEIVED com.fyt.boot.ACCOFF")
+        clearPendingAccOnFlow("ACCOFF received")
 
         val snapshot = MediaControlHelper.captureCurrentMediaSnapshot(this)
         if (snapshot == null) {
@@ -110,6 +113,7 @@ class FytForegroundService : Service() {
     private fun handleAccOn(triggerSource: String) {
         AccEventStateStore.setLastAccOnTimestamp(this)
         AccEventLog.append(this, "RECEIVED ACCON source=$triggerSource")
+        clearPendingAccOnFlow("new ACCON source=$triggerSource")
 
         val foregroundBeforeTargets = ForegroundAppHelper.getForegroundPackage(
             context = this,
@@ -150,9 +154,6 @@ class FytForegroundService : Service() {
             val delayMs = ServiceSettings.accOnPlayDelayMs(this)
             updateStatus("ACCON: launched fallback $fallbackPlayerPackage, waiting ${delayMs}ms")
 
-            pendingAccOnRunnable?.let(handler::removeCallbacks)
-            pendingAccOnRunnable = null
-            clearPendingStartupRunnables()
             val run = Runnable {
                 MediaControlHelper.sendPlay(this, fallbackPlayerPackage)
                 AccEventLog.append(
@@ -192,9 +193,6 @@ class FytForegroundService : Service() {
         val delayMs = ServiceSettings.accOnPlayDelayMs(this)
         updateStatus("ACCON: launched ${saved.packageName}, waiting ${delayMs}ms")
 
-        pendingAccOnRunnable?.let(handler::removeCallbacks)
-        pendingAccOnRunnable = null
-        clearPendingStartupRunnables()
         val run = Runnable {
             MediaControlHelper.sendPlay(this, saved.packageName)
             Log.i(TAG, "ACCON PLAY sent to ${saved.packageName}")
@@ -285,6 +283,7 @@ class FytForegroundService : Service() {
     }
 
     private fun restoreForegroundPackage(packageName: String?) {
+        clearPendingRestoreRunnables()
         if (packageName.isNullOrBlank()) {
             val homeLaunched = launchHomeScreen()
             AccEventLog.append(
@@ -301,9 +300,24 @@ class FytForegroundService : Service() {
         )
         // Some FYT launchers/apps race and bring the last target back on top.
         // Re-assert restore shortly after to keep the expected foreground app.
-        handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 500L)
-        handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 1500L)
-        handler.postDelayed({ ForegroundAppHelper.launchPackage(this, packageName) }, 3000L)
+        scheduleRestoreRetry(packageName, 500L)
+        scheduleRestoreRetry(packageName, 1500L)
+        scheduleRestoreRetry(packageName, 3000L)
+    }
+
+    private fun scheduleRestoreRetry(packageName: String, delayMs: Long) {
+        val retry = object : Runnable {
+            override fun run() {
+                pendingRestoreRunnables.remove(this)
+                val restored = ForegroundAppHelper.launchPackage(this@FytForegroundService, packageName)
+                AccEventLog.append(
+                    this@FytForegroundService,
+                    "ACCON restore retry previousForeground=$packageName delayMs=$delayMs result=$restored"
+                )
+            }
+        }
+        pendingRestoreRunnables += retry
+        handler.postDelayed(retry, delayMs)
     }
 
     private fun launchHomeScreen(): Boolean {
@@ -325,7 +339,32 @@ class FytForegroundService : Service() {
         pendingStartupRunnables.clear()
     }
 
+    private fun clearPendingRestoreRunnables() {
+        pendingRestoreRunnables.forEach(handler::removeCallbacks)
+        pendingRestoreRunnables.clear()
+    }
+
+    private fun clearPendingAccOnFlow(reason: String) {
+        val hadPendingPlay = pendingAccOnRunnable != null
+        val startupRunnableCount = pendingStartupRunnables.size
+        val restoreRunnableCount = pendingRestoreRunnables.size
+
+        pendingAccOnRunnable?.let(handler::removeCallbacks)
+        pendingAccOnRunnable = null
+        clearPendingStartupRunnables()
+        clearPendingRestoreRunnables()
+
+        if (hadPendingPlay || startupRunnableCount > 0 || restoreRunnableCount > 0) {
+            AccEventLog.append(
+                this,
+                "ACCON canceled pending flow reason=$reason pendingPlay=$hadPendingPlay " +
+                    "startupRunnables=$startupRunnableCount restoreRunnables=$restoreRunnableCount"
+            )
+        }
+    }
+
     private fun handleResetState() {
+        clearPendingAccOnFlow("state reset requested")
         MediaStateStore.clearAccOffState(this)
         AccEventStateStore.clear(this)
         AccEventLog.append(this, "RESET state requested: cleared ACC timestamps/player markers/saved ACCOFF state")

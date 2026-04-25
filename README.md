@@ -51,11 +51,14 @@ Input broadcasts expected from FYT system:
 - `com.fyt.boot.ACCOFF`
 
 ACCOFF flow:
-1. Read current active media session.
-2. Persist `packageName` using synchronous commit.
-3. Send media code `PAUSE`.
-4. Persist last-received ACCOFF timestamp.
-5. Append ACCOFF diagnostics to log file.
+1. Read active media sessions and log all detected media controllers.
+2. Select the best media controller by state priority: playing, transitional states, paused, then stopped/none.
+3. Persist selected `packageName` using synchronous commit.
+4. Send media code `PAUSE`.
+   - Use media-session transport controls when the selected package has an active controller.
+   - Fall back to package media-button broadcast plus global `AudioManager` media key dispatch only when transport controls are unavailable.
+5. Persist last-received ACCOFF timestamp.
+6. Append ACCOFF diagnostics to log file.
 
 Note on play-state handling:
 - Play-state detection from ACCOFF is intentionally not used anymore.
@@ -79,18 +82,20 @@ Receiver robustness notes:
 - Receiver first tries `startForegroundService(...)` and falls back to `startService(...)` if needed by firmware/runtime constraints.
 
 ACCON flow:
-1. Load saved package from ACCOFF.
+1. Cancel any still-pending delayed ACCON work from an earlier ACCON cycle.
+2. Capture current foreground app package before launching player/startup targets.
+3. Load saved package from ACCOFF.
    - If no saved package exists and fallback player is configured, launch fallback player, wait ACCON delay, send `PLAY`.
-2. Capture current foreground app package.
-3. Start saved player app.
-4. Wait configured delay (`ACC ON play delay`, default `2000` ms).
-5. Send media code `PLAY` to saved player.
-6. Execute configured ACCON startup targets in order (with per-target pauses).
-7. Restore previous foreground app.
+4. Start saved player app.
+5. Wait configured delay (`ACC ON play delay`, default `2000` ms).
+6. Send media code `PLAY` to saved player.
+7. Execute configured ACCON startup targets in order (with per-target pauses).
+8. Restore previous foreground app.
    - If foreground detection is unavailable, fall back to launching HOME screen.
-8. Clear saved ACCOFF package after successful ACCON handling.
-9. Persist last-received ACCON timestamp.
-10. Append ACCON diagnostics to log file.
+   - Delayed restore retries are tracked and canceled if a new ACCON/ACCOFF/reset flow arrives.
+9. Clear saved ACCOFF package after successful ACCON handling.
+10. Persist last-received ACCON timestamp.
+11. Append ACCON diagnostics to log file.
 
 ## ACCON startup targets
 Configured from `ACC ON startup targets` button in app settings screen.
@@ -101,7 +106,7 @@ Each target stores:
 - Pause after start (ms)
 - Enabled flag (checkbox in editor, persisted)
 
-Targets are persisted via `SharedPreferences` JSON and loaded automatically on ACCON.
+Targets are persisted via device-protected `SharedPreferences` JSON and loaded automatically on ACCON.
 
 Editor behavior:
 - Single scrollable list (no secondary manage list).
@@ -158,15 +163,28 @@ Each line starts with timestamp format:
 
 Logged details include:
 - ACCON/ACCOFF receive events.
-- ACCOFF active player detection and pause action.
+- ACCOFF active media-controller list, selected controller, active player detection, and pause action.
 - ACCON saved player launch attempt/result.
 - ACCON detected foreground app before startup-target flow.
 - ACCON PLAY sent to saved player.
+- Media command dispatch path (`transport` or `media_button+audio_manager`).
 - Startup target actions per item: launched or skipped with reason (for example `already_running`).
-- Previous foreground restore attempt/result.
+- Previous foreground restore attempt/result and delayed restore retry results.
+- Cancellation of pending ACCON delayed work when a newer ACCON, ACCOFF, or reset supersedes it.
 
 ## Changelog
 ### 2026-04-25
+- Tracked and canceled delayed ACCON work:
+  - pending delayed `PLAY`,
+  - startup target continuation runnables,
+  - delayed foreground restore retries.
+- Added log entry when pending ACCON work is canceled by a newer ACCON, ACCOFF, or reset.
+- ACCOFF now logs all active media controllers and the selected controller before saving the player package.
+- ACCOFF media-controller selection now prefers currently playing/transitional sessions before paused/stopped sessions.
+- Media command dispatch avoids triple-dispatch when media-session transport controls succeed.
+- Media command logs now include the dispatch path used.
+- Unified app settings/state storage through a shared device-protected storage helper, including migration from the previous normal app storage when needed.
+- Boot and ACC receivers now use the same shared start-context helper for locked/unlocked boot phases.
 - Reduced release APK size by enabling R8 minification and Android resource shrinking for `release` builds.
 - Limited packaged resources to English via `resourceConfigurations`.
 - Measured release APK size:

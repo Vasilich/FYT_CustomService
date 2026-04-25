@@ -166,6 +166,14 @@ Logged details include:
 - Previous foreground restore attempt/result.
 
 ## Changelog
+### 2026-04-25
+- Reduced release APK size by enabling R8 minification and Android resource shrinking for `release` builds.
+- Limited packaged resources to English via `resourceConfigurations`.
+- Measured release APK size:
+  - before optimization: `8,010,620` bytes (`7.64 MiB`)
+  - after optimization with `minSdk 29`: `1,365,341` bytes (`1.30 MiB`)
+- Tested `minSdk 33` for Android 13-only sizing; it saved only about `27,864` bytes versus `minSdk 29`, so `minSdk` remains `29`.
+
 ### 2026-04-04
 - Added setting: fallback player package used on ACCON when no saved ACCOFF player exists.
 - Fallback flow now mirrors normal saved-player ACCON behavior: launch player, wait configured delay, send `PLAY`.

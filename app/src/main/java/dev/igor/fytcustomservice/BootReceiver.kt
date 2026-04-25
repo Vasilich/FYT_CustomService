@@ -3,8 +3,6 @@ package dev.igor.fytcustomservice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.os.UserManager
 import androidx.core.content.ContextCompat
 
 class BootReceiver : BroadcastReceiver() {
@@ -20,7 +18,7 @@ class BootReceiver : BroadcastReceiver() {
 
         if (!shouldStart) return
 
-        val startContext = resolveStartContext(context)
+        val startContext = AppStorage.componentStartContext(context)
         val serviceIntent = Intent(startContext, FytForegroundService::class.java).apply {
             this.action = if (action == Intent.ACTION_BOOT_COMPLETED) {
                 FytForegroundService.ACTION_ACC_ON
@@ -37,15 +35,5 @@ class BootReceiver : BroadcastReceiver() {
             )
         }
         ContextCompat.startForegroundService(startContext, serviceIntent)
-    }
-
-    private fun resolveStartContext(context: Context): Context {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return context
-        val um = context.getSystemService(UserManager::class.java)
-        return if (um != null && !um.isUserUnlocked) {
-            context.createDeviceProtectedStorageContext()
-        } else {
-            context
-        }
     }
 }

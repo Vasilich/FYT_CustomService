@@ -74,16 +74,7 @@ object AccOnStartupStore {
     }
 
     private fun prefs(context: Context) =
-        storageContext(context).getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-    private fun storageContext(context: Context): Context {
-        val appContext = context.applicationContext
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return appContext
-        val deviceContext = appContext.createDeviceProtectedStorageContext()
-        // Keep a single shared prefs location for both UI and early-boot service paths.
-        runCatching { deviceContext.moveSharedPreferencesFrom(appContext, PREFS_NAME) }
-        return deviceContext
-    }
+        AppStorage.sharedPreferences(context, PREFS_NAME)
 }
 
 object InstalledAppCatalog {

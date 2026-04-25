@@ -71,5 +71,5 @@ object ServiceSettings {
     }
 
     private fun prefs(context: Context) =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        AppStorage.sharedPreferences(context, PREFS_NAME)
 }

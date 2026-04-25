@@ -3,8 +3,6 @@ package dev.igor.fytcustomservice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.os.UserManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 
@@ -28,7 +26,7 @@ class AccPowerReceiver : BroadcastReceiver() {
             "AccPowerReceiver received action=$receivedAction and forwarding to service"
         )
 
-        val startContext = resolveStartContext(context)
+        val startContext = AppStorage.componentStartContext(context)
         val serviceIntent = Intent(startContext, FytForegroundService::class.java).apply {
             action = serviceAction
             putExtra(
@@ -63,15 +61,5 @@ class AccPowerReceiver : BroadcastReceiver() {
         const val ACTION_ACC_ON = "com.fyt.boot.ACCON"
         const val ACTION_ACC_OFF = "com.fyt.boot.ACCOFF"
         private const val TAG = "AccPowerReceiver"
-
-        private fun resolveStartContext(context: Context): Context {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return context
-            val um = context.getSystemService(UserManager::class.java)
-            return if (um != null && !um.isUserUnlocked) {
-                context.createDeviceProtectedStorageContext()
-            } else {
-                context
-            }
-        }
     }
 }

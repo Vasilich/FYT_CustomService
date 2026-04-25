@@ -90,7 +90,7 @@ object AccEventStateStore {
     }
 
     private fun prefs(context: Context) =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        AppStorage.sharedPreferences(context, PREFS_NAME)
 }
 
 object AccEventLog {
@@ -114,7 +114,7 @@ object AccEventLog {
     }
 
     fun logPathForUi(context: Context): String {
-        val cached = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val cached = AppStorage.sharedPreferences(context, PREFS_NAME)
             .getString(KEY_LAST_SUCCESS_PATH, null)
         if (!cached.isNullOrBlank()) return cached
         return expectedPublicPath()
@@ -154,7 +154,7 @@ object AccEventLog {
     }
 
     private fun cacheLastSuccessPath(context: Context, absolutePath: String) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        AppStorage.sharedPreferences(context, PREFS_NAME)
             .edit()
             .putString(KEY_LAST_SUCCESS_PATH, absolutePath)
             .apply()

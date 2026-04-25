@@ -45,16 +45,25 @@ object MediaControlHelper {
     }
 
     private fun sendMediaCode(context: Context, packageName: String?, keyCode: Int) {
-        val usedTransport = dispatchViaTransportControls(context, packageName, keyCode)
-        if (!usedTransport) {
-            dispatchViaMediaButtonIntent(context, packageName, keyCode)
+        if (dispatchViaTransportControls(context, packageName, keyCode)) {
+            AccEventLog.append(
+                context,
+                "MEDIA command=${mediaCommandName(keyCode)} target=${packageName ?: "[active]"} path=transport"
+            )
+            return
         }
 
+        val usedMediaButtonIntent = dispatchViaMediaButtonIntent(context, packageName, keyCode)
         val audioManager = context.getSystemService(AudioManager::class.java)
         val down = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
         val up = KeyEvent(KeyEvent.ACTION_UP, keyCode)
         audioManager.dispatchMediaKeyEvent(down)
         audioManager.dispatchMediaKeyEvent(up)
+        AccEventLog.append(
+            context,
+            "MEDIA command=${mediaCommandName(keyCode)} target=${packageName ?: "[global]"} " +
+                "path=media_button:$usedMediaButtonIntent+audio_manager"
+        )
     }
 
     private fun dispatchViaTransportControls(
@@ -69,15 +78,20 @@ object MediaControlHelper {
             controllers.firstOrNull { it.packageName == packageName }
         } ?: return false
 
-        when (keyCode) {
-            KeyEvent.KEYCODE_MEDIA_PLAY -> target.transportControls.play()
-            KeyEvent.KEYCODE_MEDIA_PAUSE -> target.transportControls.pause()
-            else -> return false
+        return runCatching {
+            when (keyCode) {
+                KeyEvent.KEYCODE_MEDIA_PLAY -> target.transportControls.play()
+                KeyEvent.KEYCODE_MEDIA_PAUSE -> target.transportControls.pause()
+                else -> return false
+            }
+            true
+        }.getOrElse { err ->
+            Log.w(TAG, "Failed to dispatch media transport control", err)
+            false
         }
-        return true
     }
 
-    private fun dispatchViaMediaButtonIntent(context: Context, packageName: String?, keyCode: Int) {
+    private fun dispatchViaMediaButtonIntent(context: Context, packageName: String?, keyCode: Int): Boolean {
         val down = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
             if (!packageName.isNullOrBlank()) {
                 `package` = packageName
@@ -92,8 +106,14 @@ object MediaControlHelper {
             putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, keyCode))
         }
 
-        context.sendOrderedBroadcast(down, null)
-        context.sendOrderedBroadcast(up, null)
+        return runCatching {
+            context.sendOrderedBroadcast(down, null)
+            context.sendOrderedBroadcast(up, null)
+            true
+        }.getOrElse { err ->
+            Log.w(TAG, "Failed to dispatch media button intent", err)
+            false
+        }
     }
 
     private fun getActiveControllers(context: Context): List<MediaController> {
@@ -141,6 +161,14 @@ object MediaControlHelper {
             PlaybackState.STATE_NONE,
             null -> 3
             else -> 4
+        }
+    }
+
+    private fun mediaCommandName(keyCode: Int): String {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_MEDIA_PLAY -> "PLAY"
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> "PAUSE"
+            else -> keyCode.toString()
         }
     }
 }

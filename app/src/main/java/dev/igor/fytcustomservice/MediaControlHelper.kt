@@ -17,7 +17,19 @@ object MediaControlHelper {
         val controllers = getActiveControllers(context)
         if (controllers.isEmpty()) return null
 
-        val active = controllers.first()
+        AccEventLog.append(
+            context,
+            "MEDIA activeControllers=" + controllers.joinToString(",") {
+                "${it.packageName}:${mapPlaybackState(it.playbackState?.state)}"
+            }
+        )
+
+        val active = controllers.minByOrNull { playbackStatePriority(it.playbackState?.state) }
+            ?: return null
+        AccEventLog.append(
+            context,
+            "MEDIA selectedController=${active.packageName}:${mapPlaybackState(active.playbackState?.state)}"
+        )
         return SavedMediaState(
             packageName = active.packageName,
             playerState = mapPlaybackState(active.playbackState?.state)
@@ -111,6 +123,24 @@ object MediaControlHelper {
             PlaybackState.STATE_ERROR -> "error"
             PlaybackState.STATE_NONE, null -> "none"
             else -> "unknown"
+        }
+    }
+
+    private fun playbackStatePriority(state: Int?): Int {
+        return when (state) {
+            PlaybackState.STATE_PLAYING -> 0
+            PlaybackState.STATE_BUFFERING,
+            PlaybackState.STATE_CONNECTING,
+            PlaybackState.STATE_FAST_FORWARDING,
+            PlaybackState.STATE_REWINDING,
+            PlaybackState.STATE_SKIPPING_TO_PREVIOUS,
+            PlaybackState.STATE_SKIPPING_TO_NEXT,
+            PlaybackState.STATE_SKIPPING_TO_QUEUE_ITEM -> 1
+            PlaybackState.STATE_PAUSED -> 2
+            PlaybackState.STATE_STOPPED,
+            PlaybackState.STATE_NONE,
+            null -> 3
+            else -> 4
         }
     }
 }

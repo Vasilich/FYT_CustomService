@@ -155,18 +155,33 @@ object AccEventLog {
     }
 
     private fun findMediaStoreLogUri(resolver: android.content.ContentResolver): Uri? {
-        val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        val projection = arrayOf(MediaStore.MediaColumns._ID)
-        val selection = "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND " +
-            "${MediaStore.MediaColumns.RELATIVE_PATH}=?"
-        val args = arrayOf(FILE_NAME, mediaStoreRelativePath())
+        val collection = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.MediaColumns._ID,
+            MediaStore.MediaColumns.DISPLAY_NAME
+        )
+        val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND " +
+            "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?"
+        val args = arrayOf("$FILE_NAME%", "%${Environment.DIRECTORY_DOCUMENTS}/$DIR_NAME/%")
+        val sort = "${MediaStore.MediaColumns.DATE_MODIFIED} DESC"
 
-        resolver.query(collection, projection, selection, args, null)?.use { cursor ->
-            if (!cursor.moveToFirst()) return null
-            val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID))
-            return ContentUris.withAppendedId(collection, id)
+        var newestUri: Uri? = null
+        resolver.query(collection, projection, selection, args, sort)?.use { cursor ->
+            val idIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+            val nameIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idIndex)
+                val name = cursor.getString(nameIndex).orEmpty()
+                val uri = ContentUris.withAppendedId(collection, id)
+                if (name == FILE_NAME) {
+                    return uri
+                }
+                if (newestUri == null) {
+                    newestUri = uri
+                }
+            }
         }
-        return null
+        return newestUri
     }
 
     private fun createMediaStoreLogUri(resolver: android.content.ContentResolver): Uri {

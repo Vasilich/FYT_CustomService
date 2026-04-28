@@ -185,6 +185,7 @@ Logged details include:
 - Re-added runtime ACC receiver inside foreground service to improve ACCON/ACCOFF capture reliability while service is running.
 - Kept static manifest receiver as cold-start path; both receiver paths now log receive source.
 - Switched ACC log writing on Android 10+ to MediaStore append/rotate for `Documents/FYTService/FYTCustomService-acc.log` compatibility under scoped storage.
+- Fixed MediaStore log-file lookup to reuse existing `FYTCustomService-acc.log` (prevents duplicate files like `FYTCustomService-acc.log (1)`, `(2)` on repeated starts).
 - Added startup log health-check entry from main screen open (`MAIN_ACTIVITY started; log write health check`) so log-path write status can be validated without waiting for ACC events.
 - Permission/access dialog updates:
   - opens automatically on resume when required accesses are missing,

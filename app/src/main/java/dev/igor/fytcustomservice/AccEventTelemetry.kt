@@ -26,10 +26,12 @@ object AccEventStateStore {
 
     fun setLastAccOnTimestamp(context: Context, epochMs: Long = System.currentTimeMillis()) {
         prefs(context).edit().putLong(KEY_LAST_ACC_ON_MS, epochMs).apply()
+        AccEventLog.append(context, "STATE last_acc_on_ms=$epochMs")
     }
 
     fun setLastAccOffTimestamp(context: Context, epochMs: Long = System.currentTimeMillis()) {
         prefs(context).edit().putLong(KEY_LAST_ACC_OFF_MS, epochMs).apply()
+        AccEventLog.append(context, "STATE last_acc_off_ms=$epochMs")
     }
 
     fun getLastAccOnTimestamp(context: Context): Long? {
@@ -44,6 +46,7 @@ object AccEventStateStore {
 
     fun setLastSavedPlayer(context: Context, packageName: String?) {
         prefs(context).edit().putString(KEY_LAST_SAVED_PLAYER, packageName).apply()
+        AccEventLog.append(context, "STATE last_saved_player=${packageName ?: "[none]"}")
     }
 
     fun getLastSavedPlayer(context: Context): String? {
@@ -52,6 +55,7 @@ object AccEventStateStore {
 
     fun setLastSavedPlayerState(context: Context, state: String?) {
         prefs(context).edit().putString(KEY_LAST_SAVED_PLAYER_STATE, state).apply()
+        AccEventLog.append(context, "STATE last_saved_player_state=${state ?: "[none]"}")
     }
 
     fun getLastSavedPlayerState(context: Context): String? {
@@ -60,6 +64,7 @@ object AccEventStateStore {
 
     fun setLastStartedPlayer(context: Context, packageName: String?) {
         prefs(context).edit().putString(KEY_LAST_STARTED_PLAYER, packageName).apply()
+        AccEventLog.append(context, "STATE last_started_player=${packageName ?: "[none]"}")
     }
 
     fun getLastStartedPlayer(context: Context): String? {
@@ -68,6 +73,10 @@ object AccEventStateStore {
 
     fun setLastActiveAppBeforeStartupTargets(context: Context, packageName: String?) {
         prefs(context).edit().putString(KEY_LAST_ACTIVE_APP_BEFORE_STARTUP_TARGETS, packageName).apply()
+        AccEventLog.append(
+            context,
+            "STATE last_active_app_before_startup_targets=${packageName ?: "[none]"}"
+        )
     }
 
     fun getLastActiveAppBeforeStartupTargets(context: Context): String? {
@@ -76,6 +85,7 @@ object AccEventStateStore {
 
     fun setLastStartedPlayerState(context: Context, state: String?) {
         prefs(context).edit().putString(KEY_LAST_STARTED_PLAYER_STATE, state).apply()
+        AccEventLog.append(context, "STATE last_started_player_state=${state ?: "[none]"}")
     }
 
     fun getLastStartedPlayerState(context: Context): String? {
@@ -92,6 +102,7 @@ object AccEventStateStore {
             .remove(KEY_LAST_SAVED_PLAYER_STATE)
             .remove(KEY_LAST_STARTED_PLAYER_STATE)
             .apply()
+        AccEventLog.append(context, "STATE cleared acc_event_store")
     }
 
     private fun prefs(context: Context) =
@@ -263,10 +274,12 @@ object AccEventTimeFormatter {
 }
 
 private fun formatTimestamp(epochMs: Long): String {
-    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
-    return formatter.format(
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
+    val dateTime = formatter.format(
         Instant.ofEpochMilli(epochMs)
             .atZone(ZoneId.systemDefault())
             .toLocalDateTime()
     )
+    val millis = Math.floorMod(epochMs, 1000L)
+    return "$dateTime.${millis.toString().padStart(3, '0')}"
 }

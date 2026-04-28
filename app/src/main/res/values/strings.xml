@@ -19,6 +19,8 @@
     <string name="last_active_app_before_targets_format">Last active app before targets: %1$s</string>
     <string name="required_access_title">Required setup for FYT</string>
     <string name="open_setup">Open setup</string>
-    <string name="missing_notification_access">- Enable Notification access for this app</string>
+    <string name="open_app_info">App info</string>
+    <string name="missing_notification_access">- Enable Notification Listener access for this app</string>
     <string name="missing_usage_access">- Enable Usage access for this app</string>
+    <string name="notification_listener_app_info_hint">If Android blocks Notification Listener access after install, open App info for this app, allow restricted settings if shown, then return and enable Notification access.</string>
 </resources>

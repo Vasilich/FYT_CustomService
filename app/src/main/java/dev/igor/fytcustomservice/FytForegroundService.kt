@@ -5,7 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -19,12 +22,38 @@ class FytForegroundService : Service() {
     private var pendingAccOnRunnable: Runnable? = null
     private val pendingStartupRunnables = mutableListOf<Runnable>()
     private val pendingRestoreRunnables = mutableListOf<Runnable>()
+    private var runtimeAccReceiverRegistered = false
+
+    private val runtimeAccReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (val action = intent.action) {
+                AccPowerReceiver.ACTION_ACC_ON -> {
+                    AccEventStateStore.setLastAccOnTimestamp(this@FytForegroundService)
+                    AccEventLog.append(
+                        this@FytForegroundService,
+                        "RuntimeAccReceiver received action=$action"
+                    )
+                    handleAccOn(TRIGGER_SOURCE_ACC_ON_RUNTIME_RECEIVER)
+                }
+                AccPowerReceiver.ACTION_ACC_OFF -> {
+                    AccEventStateStore.setLastAccOffTimestamp(this@FytForegroundService)
+                    AccEventLog.append(
+                        this@FytForegroundService,
+                        "RuntimeAccReceiver received action=$action"
+                    )
+                    handleAccOff()
+                }
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         WatchdogScheduler.ensureScheduled(this)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Service active"))
+        registerRuntimeAccReceiver()
+        AccEventLog.append(this, "SERVICE created and runtime ACC receiver registered")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -71,6 +100,7 @@ class FytForegroundService : Service() {
         pendingAccOnRunnable = null
         clearPendingStartupRunnables()
         clearPendingRestoreRunnables()
+        unregisterRuntimeAccReceiver()
         super.onDestroy()
     }
 
@@ -419,6 +449,27 @@ class FytForegroundService : Service() {
         }
     }
 
+    private fun registerRuntimeAccReceiver() {
+        if (runtimeAccReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(AccPowerReceiver.ACTION_ACC_ON)
+            addAction(AccPowerReceiver.ACTION_ACC_OFF)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(runtimeAccReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(runtimeAccReceiver, filter)
+        }
+        runtimeAccReceiverRegistered = true
+    }
+
+    private fun unregisterRuntimeAccReceiver() {
+        if (!runtimeAccReceiverRegistered) return
+        runCatching { unregisterReceiver(runtimeAccReceiver) }
+        runtimeAccReceiverRegistered = false
+    }
+
     companion object {
         const val ACTION_START = "dev.igor.fytcustomservice.START"
         const val ACTION_STOP = "dev.igor.fytcustomservice.STOP"
@@ -432,6 +483,7 @@ class FytForegroundService : Service() {
         const val EXTRA_TRIGGER_SOURCE = "extra_trigger_source"
 
         const val TRIGGER_SOURCE_ACC_ON_INTENT = "acc_on_intent"
+        const val TRIGGER_SOURCE_ACC_ON_RUNTIME_RECEIVER = "acc_on_runtime_receiver"
         const val TRIGGER_SOURCE_BOOT_COMPLETED = "boot_completed"
         const val TRIGGER_SOURCE_FYT_STARTUP_MANAGER = "fyt_startup_manager"
         const val TRIGGER_SOURCE_BOOT_MISC = "boot_misc"

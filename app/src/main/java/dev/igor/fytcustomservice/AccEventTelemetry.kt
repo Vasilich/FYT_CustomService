@@ -1,7 +1,12 @@
 package dev.igor.fytcustomservice
 
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import java.io.File
 import java.time.Instant
@@ -106,7 +111,11 @@ object AccEventLog {
         val line = "${formatTimestamp(System.currentTimeMillis())} | $message\n"
         val file = publicDocumentsLogFile()
         runCatching {
-            appendToFile(file, line)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                appendToMediaStore(context.applicationContext, line)
+            } else {
+                appendToFile(file, line)
+            }
             cacheLastSuccessPath(context, file.absolutePath)
         }.onFailure { err ->
             Log.e(TAG, "Failed to append log to ${file.absolutePath}", err)
@@ -128,6 +137,71 @@ object AccEventLog {
     private fun publicDocumentsLogFile(): File {
         val docs = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
         return File(File(docs, DIR_NAME), FILE_NAME)
+    }
+
+    private fun appendToMediaStore(context: Context, line: String) {
+        val resolver = context.contentResolver
+        val incoming = line.toByteArray(Charsets.UTF_8)
+        var uri = findMediaStoreLogUri(resolver)
+        val currentSize = uri?.let { mediaStoreFileSize(resolver, it) } ?: 0L
+        if (uri != null && currentSize + incoming.size > MAX_LOG_SIZE_BYTES) {
+            rotateMediaStoreLog(resolver, uri)
+            uri = null
+        }
+        val targetUri = uri ?: createMediaStoreLogUri(resolver)
+        resolver.openOutputStream(targetUri, "wa")?.use { out ->
+            out.write(incoming)
+        } ?: error("Failed to open MediaStore log output stream")
+    }
+
+    private fun findMediaStoreLogUri(resolver: android.content.ContentResolver): Uri? {
+        val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val projection = arrayOf(MediaStore.MediaColumns._ID)
+        val selection = "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND " +
+            "${MediaStore.MediaColumns.RELATIVE_PATH}=?"
+        val args = arrayOf(FILE_NAME, mediaStoreRelativePath())
+
+        resolver.query(collection, projection, selection, args, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return null
+            val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID))
+            return ContentUris.withAppendedId(collection, id)
+        }
+        return null
+    }
+
+    private fun createMediaStoreLogUri(resolver: android.content.ContentResolver): Uri {
+        val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME)
+            put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, mediaStoreRelativePath())
+        }
+        return resolver.insert(collection, values)
+            ?: error("Failed to create MediaStore log file")
+    }
+
+    private fun mediaStoreFileSize(resolver: android.content.ContentResolver, uri: Uri): Long {
+        val projection = arrayOf(MediaStore.MediaColumns.SIZE)
+        resolver.query(uri, projection, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                return cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE))
+            }
+        }
+        return 0L
+    }
+
+    private fun rotateMediaStoreLog(resolver: android.content.ContentResolver, uri: Uri) {
+        val stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.US).format(
+            Instant.now().atZone(ZoneId.systemDefault())
+        )
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "FYTCustomService-acc-$stamp.log")
+        }
+        resolver.update(uri, values, null, null)
+    }
+
+    private fun mediaStoreRelativePath(): String {
+        return "${Environment.DIRECTORY_DOCUMENTS}/$DIR_NAME/"
     }
 
     private fun appendToFile(file: File, line: String) {

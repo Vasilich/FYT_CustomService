@@ -3,8 +3,10 @@ package dev.igor.fytcustomservice
 import android.Manifest
 import android.app.AlertDialog
 import android.app.AppOpsManager
+import android.content.ComponentName
 import android.content.Intent
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -34,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lastSavedPlayerText: TextView
     private lateinit var lastStartedPlayerText: TextView
     private lateinit var lastActiveAppBeforeTargetsText: TextView
+    private var requiredAccessDialog: AlertDialog? = null
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -106,7 +109,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         requestNotificationPermissionIfNeeded()
-        promptRequiredAccessesIfNeeded()
+        AccEventLog.append(this, "MAIN_ACTIVITY started; log write health check")
         refreshServiceStatusText()
         refreshAccEventTimestamps()
     }
@@ -115,6 +118,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshServiceStatusText()
         refreshAccEventTimestamps()
+        promptRequiredAccessesIfNeeded()
     }
 
     private fun showSettingsDialog() {
@@ -444,11 +448,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun ensureRequiredAccessesForConfiguration(): Boolean {
         requestNotificationPermissionIfNeeded()
-        val ok = hasNotificationListenerAccess() && hasUsageAccess()
-        if (!ok) {
-            promptRequiredAccessesIfNeeded()
-        }
-        return ok
+        return promptRequiredAccessesIfNeeded()
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -461,7 +461,7 @@ class MainActivity : AppCompatActivity() {
         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    private fun promptRequiredAccessesIfNeeded() {
+    private fun promptRequiredAccessesIfNeeded(): Boolean {
         val missing = mutableListOf<String>()
         if (!hasNotificationListenerAccess()) {
             missing += getString(R.string.missing_notification_access)
@@ -470,16 +470,42 @@ class MainActivity : AppCompatActivity() {
             missing += getString(R.string.missing_usage_access)
         }
 
-        if (missing.isEmpty()) return
+        if (missing.isEmpty()) {
+            requiredAccessDialog?.dismiss()
+            requiredAccessDialog = null
+            return true
+        }
 
-        AlertDialog.Builder(this)
+        if (requiredAccessDialog?.isShowing == true) return false
+
+        val message = buildString {
+            append(missing.joinToString(separator = "\n"))
+            if (!hasNotificationListenerAccess()) {
+                append("\n\n")
+                append(getString(R.string.notification_listener_app_info_hint))
+            }
+        }
+
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.required_access_title)
-            .setMessage(missing.joinToString(separator = "\n"))
+            .setMessage(message)
             .setPositiveButton(R.string.open_setup) { _, _ ->
                 openRequiredSettings()
             }
+            .setNeutralButton(R.string.open_app_info) { _, _ ->
+                openAppInfoSettings()
+            }
             .setNegativeButton(R.string.cancel, null)
-            .show()
+            .create()
+        dialog.setOnDismissListener {
+            if (requiredAccessDialog === dialog) {
+                requiredAccessDialog = null
+            }
+        }
+        requiredAccessDialog = dialog
+        dialog.show()
+
+        return false
     }
 
     private fun openRequiredSettings() {
@@ -493,9 +519,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun openAppInfoSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
+        }
+        startActivity(intent)
+    }
+
     private fun hasNotificationListenerAccess(): Boolean {
         val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
-        return enabled?.contains(packageName) == true
+            ?: return false
+        return enabled.split(':').any { flattened ->
+            val component = ComponentName.unflattenFromString(flattened)
+            component != null &&
+                component.packageName == packageName &&
+                component.className == FytNotificationListenerService::class.java.name
+        }
     }
 
     private fun hasUsageAccess(): Boolean {

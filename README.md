@@ -80,6 +80,10 @@ Mute AMP logic (what it actually does):
 Receiver robustness notes:
 - `AccPowerReceiver` is marked `directBootAware=true` (can receive pre-unlock phase).
 - Receiver first tries `startForegroundService(...)` and falls back to `startService(...)` if needed by firmware/runtime constraints.
+- Foreground service also registers a runtime ACC receiver for `com.fyt.boot.ACCON` / `com.fyt.boot.ACCOFF` while service is alive.
+- Runtime receiver path is logged as:
+  - `RuntimeAccReceiver received action=com.fyt.boot.ACCON`
+  - `RuntimeAccReceiver received action=com.fyt.boot.ACCOFF`
 
 ACCON flow:
 1. Cancel any still-pending delayed ACCON work from an earlier ACCON cycle.
@@ -145,10 +149,12 @@ Declared in manifest:
 - `android.permission.RECEIVE_BOOT_COMPLETED`
 - `android.permission.WAKE_LOCK`
 - `android.permission.PACKAGE_USAGE_STATS`
+- `android.permission.POST_NOTIFICATIONS`
 
 Also required in system settings for full ACC logic:
 - Notification access for `FYT custom service` (needed to inspect active media sessions reliably).
 - Usage access for `FYT custom service` (needed to detect/restore foreground app).
+- If Notification Listener access is blocked after install on Android 13, open App info for this app and allow restricted settings first, then enable Notification access.
 
 Potentially required by device firmware:
 - Vendor-specific "autostart" whitelist.
@@ -157,6 +163,8 @@ Potentially required by device firmware:
 ## ACC Event Logging
 Log file location:
 - `Documents/FYTService/FYTCustomService-acc.log`
+- On Android 10+ (`targetSdk 33`), writing uses MediaStore scoped-storage APIs for this path.
+- On older Android versions, writing uses direct file append in public Documents.
 
 Each line starts with timestamp format:
 - `yyyy-MM-dd HH:mm:ss.SSS`
@@ -173,6 +181,16 @@ Logged details include:
 - Cancellation of pending ACCON delayed work when a newer ACCON, ACCOFF, or reset supersedes it.
 
 ## Changelog
+### 2026-04-28
+- Re-added runtime ACC receiver inside foreground service to improve ACCON/ACCOFF capture reliability while service is running.
+- Kept static manifest receiver as cold-start path; both receiver paths now log receive source.
+- Switched ACC log writing on Android 10+ to MediaStore append/rotate for `Documents/FYTService/FYTCustomService-acc.log` compatibility under scoped storage.
+- Added startup log health-check entry from main screen open (`MAIN_ACTIVITY started; log write health check`) so log-path write status can be validated without waiting for ACC events.
+- Permission/access dialog updates:
+  - opens automatically on resume when required accesses are missing,
+  - includes `App info` button for restricted-settings path,
+  - validates Notification Listener access against exact listener service component.
+
 ### 2026-04-25
 - Tracked and canceled delayed ACCON work:
   - pending delayed `PLAY`,

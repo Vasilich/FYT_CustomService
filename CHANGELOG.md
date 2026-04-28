@@ -8,6 +8,7 @@
 - Added startup log health-check entry from main screen open (`MAIN_ACTIVITY started; log write health check`) so log-path write status can be validated without waiting for ACC events.
 - Updated log timestamp output to fixed `yyyy-MM-dd HH:mm:ss.zzz` format (3-digit milliseconds).
 - Added explicit `STATE ...` log lines for GUI-related markers (`last_acc_on/off`, saved/started player and states, foreground-before-startup-targets).
+- Bumped Android `versionCode` to `2` (kept `versionName` as `1.0.0`).
 - Permission/access dialog updates:
   - opens automatically on resume when required accesses are missing,
   - includes `App info` button for restricted-settings path,

@@ -9,9 +9,11 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import java.io.File
+import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Date
 import java.util.Locale
 
 object AccEventStateStore {
@@ -274,12 +276,5 @@ object AccEventTimeFormatter {
 }
 
 private fun formatTimestamp(epochMs: Long): String {
-    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
-    val dateTime = formatter.format(
-        Instant.ofEpochMilli(epochMs)
-            .atZone(ZoneId.systemDefault())
-            .toLocalDateTime()
-    )
-    val millis = Math.floorMod(epochMs, 1000L)
-    return "$dateTime.${millis.toString().padStart(3, '0')}"
+    return SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date(epochMs))
 }

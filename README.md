@@ -15,7 +15,7 @@
   - Configure ordered app/activity starts.
   - Per-target pause after launch.
   - Optional default launcher activity (no explicit activity required).
-  - Skip target if package is already running.
+  - Skip target if package is already running (multi-signal running check).
   - Per-target enabled checkbox (persisted).
 - Provides a minimal GUI to:
   - Start/stop the service.
@@ -86,20 +86,23 @@ Receiver robustness notes:
   - `RuntimeAccReceiver received action=com.fyt.boot.ACCOFF`
 
 ACCON flow:
-1. Cancel any still-pending delayed ACCON work from an earlier ACCON cycle.
-2. Capture current foreground app package before launching player/startup targets.
-3. Load saved package from ACCOFF.
+1. Ignore ACCON if:
+   - another ACCON sequence is already in progress, or
+   - the previous ACCON sequence started less than 2 minutes ago.
+2. Cancel any still-pending delayed ACCON work from an earlier ACCON cycle.
+3. Capture current foreground app package before launching player/startup targets.
+4. Load saved package from ACCOFF.
    - If no saved package exists and fallback player is configured, launch fallback player, wait ACCON delay, send `PLAY`.
-4. Start saved player app.
-5. Wait configured delay (`ACC ON play delay`, default `2000` ms).
-6. Send media code `PLAY` to saved player.
-7. Execute configured ACCON startup targets in order (with per-target pauses).
-8. Restore previous foreground app.
+5. Start saved player app.
+6. Wait configured delay (`ACC ON play delay`, default `2000` ms).
+7. Send media code `PLAY` to saved player.
+8. Execute configured ACCON startup targets in order (with per-target pauses).
+9. Restore previous foreground app.
    - If foreground detection is unavailable, fall back to launching HOME screen.
    - Delayed restore retries are tracked and canceled if a new ACCON/ACCOFF/reset flow arrives.
-9. Clear saved ACCOFF package after successful ACCON handling.
-10. Persist last-received ACCON timestamp.
-11. Append ACCON diagnostics to log file.
+10. Clear saved ACCOFF package after successful ACCON handling.
+11. Persist last-received ACCON timestamp.
+12. Append ACCON diagnostics to log file.
 
 ## ACCON startup targets
 Configured from `ACC ON startup targets` button in app settings screen.
@@ -177,10 +180,15 @@ Logged details include:
 - ACCON PLAY sent to saved player.
 - Media command dispatch path (`transport` or `media_button+audio_manager`).
 - Startup target actions per item: launched or skipped with reason (for example `already_running`).
+  - Includes running-check source details (`running_app_processes`, `foreground_usage_event`, `recent_foreground_without_background`, `not_detected`).
 - Previous foreground restore attempt/result and delayed restore retry results.
 - Cancellation of pending ACCON delayed work when a newer ACCON, ACCOFF, or reset supersedes it.
+- ACCON dedup/guard events:
+  - `reason=sequence_in_progress`
+  - `reason=duplicate_within_window` (2-minute window)
 - Explicit GUI-state marker writes as `STATE ...` entries:
   - `last_acc_on_ms`, `last_acc_off_ms`
+  - `last_acc_on_sequence_started_ms`
   - `last_saved_player`, `last_saved_player_state`
   - `last_started_player`, `last_started_player_state`
   - `last_active_app_before_startup_targets`

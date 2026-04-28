@@ -25,6 +25,7 @@ object AccEventStateStore {
     private const val KEY_LAST_ACTIVE_APP_BEFORE_STARTUP_TARGETS = "last_active_app_before_startup_targets"
     private const val KEY_LAST_SAVED_PLAYER_STATE = "last_saved_player_state"
     private const val KEY_LAST_STARTED_PLAYER_STATE = "last_started_player_state"
+    private const val KEY_LAST_ACC_ON_SEQUENCE_STARTED_MS = "last_acc_on_sequence_started_ms"
 
     fun setLastAccOnTimestamp(context: Context, epochMs: Long = System.currentTimeMillis()) {
         prefs(context).edit().putLong(KEY_LAST_ACC_ON_MS, epochMs).apply()
@@ -43,6 +44,16 @@ object AccEventStateStore {
 
     fun getLastAccOffTimestamp(context: Context): Long? {
         val v = prefs(context).getLong(KEY_LAST_ACC_OFF_MS, 0L)
+        return v.takeIf { it > 0L }
+    }
+
+    fun setLastAccOnSequenceStartedTimestamp(context: Context, epochMs: Long = System.currentTimeMillis()) {
+        prefs(context).edit().putLong(KEY_LAST_ACC_ON_SEQUENCE_STARTED_MS, epochMs).apply()
+        AccEventLog.append(context, "STATE last_acc_on_sequence_started_ms=$epochMs")
+    }
+
+    fun getLastAccOnSequenceStartedTimestamp(context: Context): Long? {
+        val v = prefs(context).getLong(KEY_LAST_ACC_ON_SEQUENCE_STARTED_MS, 0L)
         return v.takeIf { it > 0L }
     }
 
@@ -103,6 +114,7 @@ object AccEventStateStore {
             .remove(KEY_LAST_ACTIVE_APP_BEFORE_STARTUP_TARGETS)
             .remove(KEY_LAST_SAVED_PLAYER_STATE)
             .remove(KEY_LAST_STARTED_PLAYER_STATE)
+            .remove(KEY_LAST_ACC_ON_SEQUENCE_STARTED_MS)
             .apply()
         AccEventLog.append(context, "STATE cleared acc_event_store")
     }

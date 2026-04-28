@@ -1,6 +1,8 @@
 package dev.igor.fytcustomservice
 
 import android.app.ActivityManager
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -25,6 +27,11 @@ data class InstalledActivityEntry(
     val packageName: String,
     val activityName: String,
     val displayName: String
+)
+
+data class RunningCheckResult(
+    val isRunning: Boolean,
+    val source: String
 )
 
 object AccOnStartupStore {
@@ -139,12 +146,79 @@ object StartupTargetLauncher {
         }.getOrDefault(false)
     }
 
-    fun isPackageLikelyRunning(context: Context, packageName: String): Boolean {
+    fun checkPackageLikelyRunning(context: Context, packageName: String): RunningCheckResult {
         val am = context.getSystemService(ActivityManager::class.java)
         @Suppress("DEPRECATION")
-        val processes = am.runningAppProcesses ?: return false
-        return processes.any { process ->
+        val processes = am.runningAppProcesses ?: emptyList()
+        val processMatch = processes.any { process ->
             process.pkgList?.any { pkg -> pkg == packageName } == true
         }
+        if (processMatch) {
+            return RunningCheckResult(
+                isRunning = true,
+                source = "running_app_processes"
+            )
+        }
+
+        val foregroundNow = ForegroundAppHelper.getForegroundPackage(
+            context = context,
+            excludePackage = null
+        )
+        if (foregroundNow == packageName) {
+            return RunningCheckResult(
+                isRunning = true,
+                source = "foreground_usage_event"
+            )
+        }
+
+        val usageStatsManager = context.getSystemService(UsageStatsManager::class.java)
+        if (usageStatsManager == null) {
+            return RunningCheckResult(
+                isRunning = false,
+                source = "no_usage_stats_manager"
+            )
+        }
+
+        val now = System.currentTimeMillis()
+        val events = usageStatsManager.queryEvents(now - RUNNING_EVENT_LOOKBACK_MS, now)
+        val event = UsageEvents.Event()
+        var lastState: Int? = null
+        var lastStateTs = 0L
+
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            if (event.packageName != packageName) continue
+            when (event.eventType) {
+                UsageEvents.Event.ACTIVITY_RESUMED -> {
+                    lastState = STATE_FOREGROUND
+                    lastStateTs = event.timeStamp
+                }
+                UsageEvents.Event.ACTIVITY_PAUSED,
+                UsageEvents.Event.ACTIVITY_STOPPED -> {
+                    lastState = STATE_BACKGROUND
+                    lastStateTs = event.timeStamp
+                }
+            }
+        }
+
+        if (lastState == STATE_FOREGROUND && now - lastStateTs <= RUNNING_EVENT_LOOKBACK_MS) {
+            return RunningCheckResult(
+                isRunning = true,
+                source = "recent_foreground_without_background"
+            )
+        }
+
+        return RunningCheckResult(
+            isRunning = false,
+            source = "not_detected"
+        )
     }
+
+    fun isPackageLikelyRunning(context: Context, packageName: String): Boolean {
+        return checkPackageLikelyRunning(context, packageName).isRunning
+    }
+
+    private const val RUNNING_EVENT_LOOKBACK_MS = 2 * 60 * 1000L
+    private const val STATE_FOREGROUND = 1
+    private const val STATE_BACKGROUND = 2
 }

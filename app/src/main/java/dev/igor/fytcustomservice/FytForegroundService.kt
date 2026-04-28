@@ -22,6 +22,7 @@ class FytForegroundService : Service() {
     private var pendingAccOnRunnable: Runnable? = null
     private val pendingStartupRunnables = mutableListOf<Runnable>()
     private val pendingRestoreRunnables = mutableListOf<Runnable>()
+    private var accOnSequenceInProgress = false
     private var runtimeAccReceiverRegistered = false
 
     private val runtimeAccReceiver = object : BroadcastReceiver() {
@@ -100,6 +101,7 @@ class FytForegroundService : Service() {
         pendingAccOnRunnable = null
         clearPendingStartupRunnables()
         clearPendingRestoreRunnables()
+        accOnSequenceInProgress = false
         unregisterRuntimeAccReceiver()
         super.onDestroy()
     }
@@ -141,9 +143,34 @@ class FytForegroundService : Service() {
     }
 
     private fun handleAccOn(triggerSource: String) {
-        AccEventStateStore.setLastAccOnTimestamp(this)
-        AccEventLog.append(this, "RECEIVED ACCON source=$triggerSource")
+        val nowMs = System.currentTimeMillis()
+        val lastSequenceStartedMs = AccEventStateStore.getLastAccOnSequenceStartedTimestamp(this)
+        if (accOnSequenceInProgress) {
+            AccEventLog.append(
+                this,
+                "ACCON ignored source=$triggerSource reason=sequence_in_progress"
+            )
+            updateStatus("ACCON ignored: sequence already running")
+            return
+        }
+        if (lastSequenceStartedMs != null) {
+            val elapsedMs = nowMs - lastSequenceStartedMs
+            if (elapsedMs >= 0L && elapsedMs < ACC_ON_SEQUENCE_DEDUP_WINDOW_MS) {
+                AccEventLog.append(
+                    this,
+                    "ACCON ignored source=$triggerSource reason=duplicate_within_window " +
+                        "elapsedMs=$elapsedMs windowMs=$ACC_ON_SEQUENCE_DEDUP_WINDOW_MS"
+                )
+                updateStatus("ACCON ignored: duplicate within 2 minutes")
+                return
+            }
+        }
+
         clearPendingAccOnFlow("new ACCON source=$triggerSource")
+        accOnSequenceInProgress = true
+        AccEventStateStore.setLastAccOnTimestamp(this, nowMs)
+        AccEventStateStore.setLastAccOnSequenceStartedTimestamp(this, nowMs)
+        AccEventLog.append(this, "RECEIVED ACCON source=$triggerSource")
 
         val foregroundBeforeTargets = ForegroundAppHelper.getForegroundPackage(
             context = this,
@@ -163,6 +190,7 @@ class FytForegroundService : Service() {
                 AccEventLog.append(this, "ACCON no saved ACCOFF player state; running startup targets only")
                 runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
                     updateStatus("ACCON done: startup targets only")
+                    completeAccOnSequence("startup_targets_only")
                 }
                 return
             }
@@ -176,6 +204,7 @@ class FytForegroundService : Service() {
                 updateStatus("ACCON: fallback launch failed, running startup targets")
                 runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
                     updateStatus("ACCON done: startup targets only (fallback launch failed)")
+                    completeAccOnSequence("startup_targets_only_fallback_launch_failed")
                 }
                 return
             }
@@ -193,6 +222,7 @@ class FytForegroundService : Service() {
                 runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
                     updateStatus("ACCON done: fallback player $fallbackPlayerPackage")
                     pendingAccOnRunnable = null
+                    completeAccOnSequence("fallback_player_flow_completed")
                 }
             }
             pendingAccOnRunnable = run
@@ -215,6 +245,7 @@ class FytForegroundService : Service() {
             )
             runConfiguredStartupTargets(restorePackage = foregroundBeforeTargets, triggerSource = triggerSource) {
                 updateStatus("ACCON done: startup targets only (saved launch failed)")
+                completeAccOnSequence("startup_targets_only_saved_player_launch_failed")
             }
             return
         }
@@ -233,6 +264,7 @@ class FytForegroundService : Service() {
                 AccEventLog.append(this, "ACCON cleared saved ACCOFF player state")
                 updateStatus("ACCON done: ${saved.packageName}")
                 pendingAccOnRunnable = null
+                completeAccOnSequence("saved_player_flow_completed")
             }
         }
         pendingAccOnRunnable = run
@@ -272,16 +304,20 @@ class FytForegroundService : Service() {
                 scheduleNext(index + 1)
                 return
             }
-            val alreadyRunning = StartupTargetLauncher.isPackageLikelyRunning(this, target.packageName)
-            if (alreadyRunning) {
+            val runningCheck = StartupTargetLauncher.checkPackageLikelyRunning(
+                this,
+                target.packageName
+            )
+            if (runningCheck.isRunning) {
                 Log.i(
                     TAG,
-                    "ACCON startup target skipped (already running): ${target.packageName}/${target.activityName}"
+                    "ACCON startup target skipped (already running via ${runningCheck.source}): " +
+                        "${target.packageName}/${target.activityName}"
                 )
                 AccEventLog.append(
                     this,
                     "ACCON target[$index] skipped package=${target.packageName} activity=${target.activityName ?: "[default]"} " +
-                        "reason=already_running"
+                        "reason=already_running source=${runningCheck.source}"
                 )
                 scheduleNext(index + 1)
                 return
@@ -296,7 +332,7 @@ class FytForegroundService : Service() {
             AccEventLog.append(
                 this,
                 "ACCON target[$index] launch package=${target.packageName} activity=${target.activityName ?: "[default]"} " +
-                    "pause=${target.pauseAfterMs}ms result=$launched"
+                    "pause=${target.pauseAfterMs}ms result=$launched runningCheckSource=${runningCheck.source}"
             )
 
             val next = object : Runnable {
@@ -378,19 +414,28 @@ class FytForegroundService : Service() {
         val hadPendingPlay = pendingAccOnRunnable != null
         val startupRunnableCount = pendingStartupRunnables.size
         val restoreRunnableCount = pendingRestoreRunnables.size
+        val wasInProgress = accOnSequenceInProgress
 
         pendingAccOnRunnable?.let(handler::removeCallbacks)
         pendingAccOnRunnable = null
         clearPendingStartupRunnables()
         clearPendingRestoreRunnables()
+        accOnSequenceInProgress = false
 
-        if (hadPendingPlay || startupRunnableCount > 0 || restoreRunnableCount > 0) {
+        if (hadPendingPlay || startupRunnableCount > 0 || restoreRunnableCount > 0 || wasInProgress) {
             AccEventLog.append(
                 this,
                 "ACCON canceled pending flow reason=$reason pendingPlay=$hadPendingPlay " +
-                    "startupRunnables=$startupRunnableCount restoreRunnables=$restoreRunnableCount"
+                    "startupRunnables=$startupRunnableCount restoreRunnables=$restoreRunnableCount " +
+                    "wasInProgress=$wasInProgress"
             )
         }
+    }
+
+    private fun completeAccOnSequence(reason: String) {
+        if (!accOnSequenceInProgress) return
+        accOnSequenceInProgress = false
+        AccEventLog.append(this, "ACCON sequence completed reason=$reason")
     }
 
     private fun handleResetState() {
@@ -492,5 +537,6 @@ class FytForegroundService : Service() {
         private const val TAG = "FytForegroundService"
         private const val CHANNEL_ID = "fyt_custom_service_channel"
         private const val NOTIFICATION_ID = 7870
+        private const val ACC_ON_SEQUENCE_DEDUP_WINDOW_MS = 2 * 60 * 1000L
     }
 }

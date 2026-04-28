@@ -1,6 +1,18 @@
 # Changelog
 
 ### 2026-04-28
+- Added ACCON reentrance/duplicate guard:
+  - blocks ACCON while a previous ACCON sequence is still in progress,
+  - blocks repeated ACCON sequence starts within 2 minutes from previous ACCON sequence start.
+- Added persisted ACCON sequence-start marker:
+  - `STATE last_acc_on_sequence_started_ms=...`
+- Hardened ACCON startup-target "already running" detection:
+  - combines process-list check with usage-events foreground/activity state checks.
+- Startup-target logs now include running-check source:
+  - `running_app_processes`
+  - `foreground_usage_event`
+  - `recent_foreground_without_background`
+  - `not_detected`
 - Re-added runtime ACC receiver inside foreground service to improve ACCON/ACCOFF capture reliability while service is running.
 - Kept static manifest receiver as cold-start path; both receiver paths now log receive source.
 - Switched ACC log writing on Android 10+ to MediaStore append/rotate for `Documents/FYTService/FYTCustomService-acc.log` compatibility under scoped storage.

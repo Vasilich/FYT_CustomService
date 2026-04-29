@@ -66,7 +66,13 @@ class MainActivity : AppCompatActivity() {
         btnStart.setOnClickListener {
             ContextCompat.startForegroundService(
                 this,
-                Intent(this, FytForegroundService::class.java).setAction(FytForegroundService.ACTION_START)
+                Intent(this, FytForegroundService::class.java).apply {
+                    action = FytForegroundService.ACTION_START
+                    putExtra(
+                        FytForegroundService.EXTRA_TRIGGER_SOURCE,
+                        FytForegroundService.TRIGGER_SOURCE_MANUAL_START
+                    )
+                }
             )
             statusText.text = getString(R.string.status_running)
         }

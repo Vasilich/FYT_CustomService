@@ -1,5 +1,14 @@
 # Changelog
 
+### 2026-04-30
+- Added missed-ACCON recovery on generic service `ACTION_START`:
+  - if `last_acc_off_ms > last_acc_on_ms`, service runs ACCON-equivalent startup flow.
+  - recovery start is logged with `reason=missed_acc_on_recovery`.
+- Added explicit `ACTION_START` source tags for diagnostics:
+  - manual UI start: `manual_start`
+  - watchdog restart: `watchdog`
+  - recovery source prefix: `missed_acc_on_recovery:<source>`
+
 ### 2026-04-28
 - Added ACCON reentrance/duplicate guard:
   - blocks ACCON while a previous ACCON sequence is still in progress,

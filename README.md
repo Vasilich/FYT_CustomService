@@ -81,6 +81,9 @@ Receiver robustness notes:
 - `AccPowerReceiver` is marked `directBootAware=true` (can receive pre-unlock phase).
 - Receiver first tries `startForegroundService(...)` and falls back to `startService(...)` if needed by firmware/runtime constraints.
 - Foreground service also registers a runtime ACC receiver for `com.fyt.boot.ACCON` / `com.fyt.boot.ACCOFF` while service is alive.
+- `ACTION_START` recovery path:
+  - if `last_acc_off_ms > last_acc_on_ms`, service runs ACCON-equivalent recovery flow and logs `reason=missed_acc_on_recovery`.
+  - recovery source tag is appended to trigger source (for example `missed_acc_on_recovery:watchdog`).
 - Runtime receiver path is logged as:
   - `RuntimeAccReceiver received action=com.fyt.boot.ACCON`
   - `RuntimeAccReceiver received action=com.fyt.boot.ACCOFF`
@@ -174,6 +177,7 @@ Each line starts with timestamp format:
 
 Logged details include:
 - ACCON/ACCOFF receive events.
+- `ACTION_START` missed-ACCON recovery decision (`reason=missed_acc_on_recovery` when triggered).
 - ACCOFF active media-controller list, selected controller, active player detection, and pause action.
 - ACCON saved player launch attempt/result.
 - ACCON detected foreground app before startup-target flow.

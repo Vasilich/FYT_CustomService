@@ -35,6 +35,10 @@ class ServiceWatchdogWorker(
         if (!ServiceRuntimeHelper.isForegroundServiceRunning(applicationContext)) {
             val intent = Intent(applicationContext, FytForegroundService::class.java).apply {
                 action = FytForegroundService.ACTION_START
+                putExtra(
+                    FytForegroundService.EXTRA_TRIGGER_SOURCE,
+                    FytForegroundService.TRIGGER_SOURCE_WATCHDOG
+                )
             }
             ContextCompat.startForegroundService(applicationContext, intent)
         }

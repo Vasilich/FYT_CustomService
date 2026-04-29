@@ -79,12 +79,12 @@ class FytForegroundService : Service() {
             ACTION_ACC_ON -> handleAccOn(triggerSource)
             ACTION_RESET_STATE -> handleResetState()
             ACTION_START -> {
-                if (triggerSource == TRIGGER_SOURCE_FYT_STARTUP_MANAGER) {
+                if (shouldRecoverMissedAccOn()) {
                     AccEventLog.append(
                         this,
-                        "ACTION_START from FYT startup manager; running ACCON-equivalent startup flow"
+                        "ACTION_START source=$triggerSource reason=missed_acc_on_recovery; running ACCON-equivalent startup flow"
                     )
-                    handleAccOn(triggerSource)
+                    handleAccOn("$TRIGGER_SOURCE_MISSED_ACC_ON_RECOVERY:$triggerSource")
                 } else {
                     AccEventLog.append(this, "ACTION_START received source=$triggerSource")
                 }
@@ -446,6 +446,12 @@ class FytForegroundService : Service() {
         updateStatus("State reset complete")
     }
 
+    private fun shouldRecoverMissedAccOn(): Boolean {
+        val lastAccOffMs = AccEventStateStore.getLastAccOffTimestamp(this) ?: return false
+        val lastAccOnMs = AccEventStateStore.getLastAccOnTimestamp(this) ?: return true
+        return lastAccOffMs > lastAccOnMs
+    }
+
     private fun executeCommand(code: Int, arg1: Int) {
         when (code) {
             1 -> Log.i(TAG, "Command 1 executed, arg1=$arg1")
@@ -531,6 +537,9 @@ class FytForegroundService : Service() {
         const val TRIGGER_SOURCE_ACC_ON_RUNTIME_RECEIVER = "acc_on_runtime_receiver"
         const val TRIGGER_SOURCE_BOOT_COMPLETED = "boot_completed"
         const val TRIGGER_SOURCE_FYT_STARTUP_MANAGER = "fyt_startup_manager"
+        const val TRIGGER_SOURCE_MANUAL_START = "manual_start"
+        const val TRIGGER_SOURCE_WATCHDOG = "watchdog"
+        const val TRIGGER_SOURCE_MISSED_ACC_ON_RECOVERY = "missed_acc_on_recovery"
         const val TRIGGER_SOURCE_BOOT_MISC = "boot_misc"
         private const val TRIGGER_SOURCE_UNKNOWN = "unknown"
 

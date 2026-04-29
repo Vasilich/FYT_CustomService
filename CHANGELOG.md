@@ -1,6 +1,8 @@
 # Changelog
 
 ### 2026-04-30
+- Changed active log path and filename to:
+  - `Documents/FYTCustomService/FYTCustomService.log`
 - Added missed-ACCON recovery on generic service `ACTION_START`:
   - if `last_acc_off_ms > last_acc_on_ms`, service runs ACCON-equivalent startup flow.
   - recovery start is logged with `reason=missed_acc_on_recovery`.

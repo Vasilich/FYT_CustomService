@@ -26,7 +26,7 @@
   - Configure fallback player package for ACCON when no saved player exists.
   - Configure ACCON startup targets.
 - Schedules a watchdog worker (15-minute periodic check) to restart the service if killed.
-- Writes ACC event logs to public Documents folder (`Documents/FYTService/FYTCustomService-acc.log`).
+- Writes ACC event logs to public Documents folder (`Documents/FYTCustomService/FYTCustomService.log`).
 
 ## Intent contract
 Default action:
@@ -168,7 +168,7 @@ Potentially required by device firmware:
 
 ## ACC Event Logging
 Log file location:
-- `Documents/FYTService/FYTCustomService-acc.log`
+- `Documents/FYTCustomService/FYTCustomService.log`
 - On Android 10+ (`targetSdk 33`), writing uses MediaStore scoped-storage APIs for this path.
 - On older Android versions, writing uses direct file append in public Documents.
 

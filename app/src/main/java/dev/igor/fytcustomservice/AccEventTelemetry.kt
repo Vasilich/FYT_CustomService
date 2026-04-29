@@ -124,8 +124,8 @@ object AccEventStateStore {
 }
 
 object AccEventLog {
-    private const val FILE_NAME = "FYTCustomService-acc.log"
-    private const val DIR_NAME = "FYTService"
+    private const val FILE_NAME = "FYTCustomService.log"
+    private const val DIR_NAME = "FYTCustomService"
     private const val PREFS_NAME = "fyt_custom_service_acc_log"
     private const val KEY_LAST_SUCCESS_PATH = "last_success_path"
     private const val MAX_LOG_SIZE_BYTES = 100 * 1024L
@@ -185,35 +185,27 @@ object AccEventLog {
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.DISPLAY_NAME
         )
-        val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND " +
+        val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND " +
             "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?"
-        val args = arrayOf("$FILE_NAME%", "%${Environment.DIRECTORY_DOCUMENTS}/$DIR_NAME/%")
+        val args = arrayOf(FILE_NAME, "%${Environment.DIRECTORY_DOCUMENTS}/$DIR_NAME/%")
         val sort = "${MediaStore.MediaColumns.DATE_MODIFIED} DESC"
 
-        var newestUri: Uri? = null
         resolver.query(collection, projection, selection, args, sort)?.use { cursor ->
             val idIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
-            val nameIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idIndex)
-                val name = cursor.getString(nameIndex).orEmpty()
-                val uri = ContentUris.withAppendedId(collection, id)
-                if (name == FILE_NAME) {
-                    return uri
-                }
-                if (newestUri == null) {
-                    newestUri = uri
-                }
+                return ContentUris.withAppendedId(collection, id)
             }
         }
-        return newestUri
+        return null
     }
 
     private fun createMediaStoreLogUri(resolver: android.content.ContentResolver): Uri {
         val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME)
-            put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+            // Keep .log extension stable across OEM file managers.
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
             put(MediaStore.MediaColumns.RELATIVE_PATH, mediaStoreRelativePath())
         }
         return resolver.insert(collection, values)
@@ -235,7 +227,7 @@ object AccEventLog {
             Instant.now().atZone(ZoneId.systemDefault())
         )
         val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "FYTCustomService-acc-$stamp.log")
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "FYTCustomService-$stamp.log")
         }
         resolver.update(uri, values, null, null)
     }
@@ -262,7 +254,7 @@ object AccEventLog {
         val stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.US).format(
             Instant.now().atZone(ZoneId.systemDefault())
         )
-        val archive = File(source.parentFile, "FYTCustomService-acc-$stamp.log")
+        val archive = File(source.parentFile, "FYTCustomService-$stamp.log")
         source.copyTo(archive, overwrite = true)
         source.writeText("", Charsets.UTF_8)
     }

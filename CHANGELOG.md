@@ -1,5 +1,12 @@
 # Changelog
 
+### 2026-05-02
+- Hardened ACCON previous-foreground capture:
+  - capture runs before player launch decisions,
+  - if first foreground detection equals player-to-launch, retries with player excluded.
+- If previous foreground cannot be resolved reliably, ACCON restore now forces launcher HOME screen after startup sequence.
+- Bumped Android `versionCode` to `3` (kept `versionName` as `1.0.0`).
+
 ### 2026-04-30
 - Changed active log path and filename to:
   - `Documents/FYTCustomService/FYTCustomService.log`

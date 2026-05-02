@@ -94,6 +94,8 @@ ACCON flow:
    - the previous ACCON sequence started less than 2 minutes ago.
 2. Cancel any still-pending delayed ACCON work from an earlier ACCON cycle.
 3. Capture current foreground app package before launching player/startup targets.
+   - If detected foreground equals player-to-launch, perform second detection excluding that player.
+   - If a reliable previous app still cannot be resolved, force HOME restore after startup flow.
 4. Load saved package from ACCOFF.
    - If no saved package exists and fallback player is configured, launch fallback player, wait ACCON delay, send `PLAY`.
 5. Start saved player app.

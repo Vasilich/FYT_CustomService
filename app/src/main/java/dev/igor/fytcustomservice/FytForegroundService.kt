@@ -172,19 +172,17 @@ class FytForegroundService : Service() {
         AccEventStateStore.setLastAccOnSequenceStartedTimestamp(this, nowMs)
         AccEventLog.append(this, "RECEIVED ACCON source=$triggerSource")
 
-        val foregroundBeforeTargets = ForegroundAppHelper.getForegroundPackage(
-            context = this,
-            excludePackage = null
-        )
+        val saved = MediaStateStore.loadAccOffState(this)
+        val fallbackPlayerPackage = ServiceSettings.accOnFallbackPlayerPackage(this)
+        val playerPackageToLaunch = saved?.packageName ?: fallbackPlayerPackage
+        val foregroundBeforeTargets = detectForegroundBeforePlayerLaunch(playerPackageToLaunch)
         AccEventStateStore.setLastActiveAppBeforeStartupTargets(this, foregroundBeforeTargets)
         AccEventLog.append(
             this,
             "ACCON detected previousForegroundBeforeStartupTargets=${foregroundBeforeTargets ?: "[none]"}"
         )
 
-        val saved = MediaStateStore.loadAccOffState(this)
         if (saved == null) {
-            val fallbackPlayerPackage = ServiceSettings.accOnFallbackPlayerPackage(this)
             if (fallbackPlayerPackage.isNullOrBlank()) {
                 updateStatus("ACCON: no saved player, running startup targets")
                 AccEventLog.append(this, "ACCON no saved ACCOFF player state; running startup targets only")
@@ -444,6 +442,44 @@ class FytForegroundService : Service() {
         AccEventStateStore.clear(this)
         AccEventLog.append(this, "RESET state requested: cleared ACC timestamps/player markers/saved ACCOFF state")
         updateStatus("State reset complete")
+    }
+
+    private fun detectForegroundBeforePlayerLaunch(playerPackageToLaunch: String?): String? {
+        fun normalize(pkg: String?): String? {
+            val trimmed = pkg?.trim().orEmpty()
+            if (trimmed.isBlank()) return null
+            if (trimmed == packageName) return null
+            return trimmed
+        }
+
+        val first = normalize(
+            ForegroundAppHelper.getForegroundPackage(
+                context = this,
+                excludePackage = null
+            )
+        )
+        if (playerPackageToLaunch.isNullOrBlank()) return first
+        if (first.isNullOrBlank() || first != playerPackageToLaunch) return first
+
+        val second = normalize(
+            ForegroundAppHelper.getForegroundPackage(
+                context = this,
+                excludePackage = playerPackageToLaunch
+            )
+        )
+        if (!second.isNullOrBlank()) {
+            AccEventLog.append(
+                this,
+                "ACCON foreground detection adjusted first=$first excluded=$playerPackageToLaunch second=$second"
+            )
+            return second
+        }
+        AccEventLog.append(
+            this,
+            "ACCON foreground detection unresolved after excluding player=$playerPackageToLaunch; " +
+                "forcing HOME restore"
+        )
+        return null
     }
 
     private fun shouldRecoverMissedAccOn(): Boolean {

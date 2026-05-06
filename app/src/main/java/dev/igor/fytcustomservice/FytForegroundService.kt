@@ -24,6 +24,7 @@ class FytForegroundService : Service() {
     private val pendingStartupRunnables = mutableListOf<Runnable>()
     private val pendingRestoreRunnables = mutableListOf<Runnable>()
     private var accOnSequenceInProgress = false
+    private var serviceStartReasonLogged = false
     private var runtimeAccReceiverRegistered = false
 
     private val runtimeAccReceiver = object : BroadcastReceiver() {
@@ -55,13 +56,21 @@ class FytForegroundService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Service active"))
         registerRuntimeAccReceiver()
-        AccEventLog.append(this, "SERVICE created and runtime ACC receiver registered")
+        AccEventLog.append(this, "SERVICE created and runtime ACC receiver registered (awaiting start reason)")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         WatchdogScheduler.ensureScheduled(this)
         val triggerSource = intent?.getStringExtra(EXTRA_TRIGGER_SOURCE).orEmpty().ifBlank {
             TRIGGER_SOURCE_UNKNOWN
+        }
+        if (!serviceStartReasonLogged) {
+            val actionName = intent?.action ?: "[null]"
+            AccEventLog.append(
+                this,
+                "SERVICE start reason action=$actionName source=$triggerSource flags=$flags startId=$startId"
+            )
+            serviceStartReasonLogged = true
         }
         when (intent?.action) {
             ACTION_STOP -> {

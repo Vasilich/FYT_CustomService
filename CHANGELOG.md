@@ -1,6 +1,8 @@
 # Changelog
 
 ### 2026-05-06
+- Added explicit service creation/start reason log on first `onStartCommand`:
+  - `SERVICE start reason action=... source=... flags=... startId=...`
 - Release build fix:
   - updated Gradle wrapper from `8.7` to `8.8` to avoid `Unknown constant tag 49` failure in `:app:sdkReleaseDependencyData`.
 - APK output naming:

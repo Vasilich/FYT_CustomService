@@ -179,6 +179,8 @@ Each line starts with timestamp format:
 - `yyyy-MM-dd HH:mm:ss.zzz` (3-digit milliseconds, for example `2026-04-28 14:37:05.042`)
 
 Logged details include:
+- Service creation/start reason on first `onStartCommand`:
+  - `SERVICE start reason action=... source=... flags=... startId=...`
 - ACCON/ACCOFF receive events.
 - `ACTION_START` missed-ACCON recovery decision (`reason=missed_acc_on_recovery` when triggered).
 - ACCOFF active media-controller list, selected controller, active player detection, and pause action.

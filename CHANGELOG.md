@@ -1,5 +1,9 @@
 # Changelog
 
+### 2026-05-06 (update 2)
+- Release signing now reads `RELEASE_*` values from Gradle properties/environment variables.
+- Project uses local `.gradle-user-home/gradle.properties` for signing secrets (gitignored).
+
 ### 2026-05-06
 - Added explicit service creation/start reason log on first `onStartCommand`:
   - `SERVICE start reason action=... source=... flags=... startId=...`

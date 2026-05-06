@@ -169,6 +169,16 @@ Potentially required by device firmware:
 - Vendor-specific "autostart" whitelist.
 - Vendor-specific keep-alive whitelist / startup manager exception.
 
+## Release signing
+Release signing uses Gradle properties loaded from this project-local Gradle user home:
+- `.gradle-user-home/gradle.properties` (already gitignored)
+
+Required keys:
+- `RELEASE_STORE_FILE`
+- `RELEASE_STORE_PASSWORD`
+- `RELEASE_KEY_ALIAS`
+- `RELEASE_KEY_PASSWORD`
+
 ## ACC Event Logging
 Log file location:
 - `Documents/FYTCustomService/FYTCustomService.log`

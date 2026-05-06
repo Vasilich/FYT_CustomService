@@ -15,6 +15,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import java.util.Locale
 
 class FytForegroundService : Service() {
 
@@ -356,6 +357,14 @@ class FytForegroundService : Service() {
             )
             return
         }
+        if (isSyuLauncherPackage(packageName)) {
+            val homeLaunched = launchHomeScreen()
+            AccEventLog.append(
+                this,
+                "ACCON restore detected SYU launcher package=$packageName; using HOME intent result=$homeLaunched"
+            )
+            return
+        }
         val restored = ForegroundAppHelper.launchPackage(this, packageName)
         Log.i(TAG, "ACCON restore foreground package=$packageName result=$restored")
         AccEventLog.append(
@@ -396,6 +405,11 @@ class FytForegroundService : Service() {
             Log.w(TAG, "Failed to launch HOME screen", err)
             false
         }
+    }
+
+    private fun isSyuLauncherPackage(packageName: String): Boolean {
+        val normalized = packageName.lowercase(Locale.US)
+        return normalized.startsWith("com.syu.") && normalized.contains("launcher")
     }
 
     private fun clearPendingStartupRunnables() {

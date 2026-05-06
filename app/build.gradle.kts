@@ -39,7 +39,7 @@ android {
     }
 
     applicationVariants.all {
-        if (buildType.name == "debug") {
+        if (buildType.name == "debug" || buildType.name == "release") {
             outputs.all {
                 @Suppress("UNCHECKED_CAST")
                 (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =

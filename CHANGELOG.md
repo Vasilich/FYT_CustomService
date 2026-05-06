@@ -1,5 +1,13 @@
 # Changelog
 
+### 2026-05-06
+- Release build fix:
+  - updated Gradle wrapper from `8.7` to `8.8` to avoid `Unknown constant tag 49` failure in `:app:sdkReleaseDependencyData`.
+- APK output naming:
+  - release APK now uses the same fixed name as debug: `FYTCustomService.apk`.
+- ACCON restore behavior for FYT launcher packages:
+  - if previous foreground package matches `com.syu.*launcher*`, restore uses HOME intent instead of package relaunch.
+
 ### 2026-05-02
 - Hardened ACCON previous-foreground capture:
   - capture runs before player launch decisions,

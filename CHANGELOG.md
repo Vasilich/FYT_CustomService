@@ -3,6 +3,8 @@
 ### 2026-05-06 (update 2)
 - Release signing now reads `RELEASE_*` values from Gradle properties/environment variables.
 - Project uses local `.gradle-user-home/gradle.properties` for signing secrets (gitignored).
+- ACCON foreground restore retries are now conditional:
+  - each retry is skipped when target app is already foreground (`reason=already_foreground`).
 
 ### 2026-05-06
 - Added explicit service creation/start reason log on first `onStartCommand`:

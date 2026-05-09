@@ -391,6 +391,17 @@ class FytForegroundService : Service() {
         val retry = object : Runnable {
             override fun run() {
                 pendingRestoreRunnables.remove(this)
+                val currentForeground = ForegroundAppHelper.getForegroundPackage(
+                    context = this@FytForegroundService,
+                    excludePackage = null
+                )
+                if (currentForeground == packageName) {
+                    AccEventLog.append(
+                        this@FytForegroundService,
+                        "ACCON restore retry skipped previousForeground=$packageName delayMs=$delayMs reason=already_foreground"
+                    )
+                    return
+                }
                 val restored = ForegroundAppHelper.launchPackage(this@FytForegroundService, packageName)
                 AccEventLog.append(
                     this@FytForegroundService,

@@ -366,6 +366,14 @@ class FytForegroundService : Service() {
             )
             return
         }
+        if (isAccOnStartupTargetPackage(packageName)) {
+            val homeLaunched = launchHomeScreen()
+            AccEventLog.append(
+                this,
+                "ACCON restore previousForeground=$packageName matches_startup_target; launched HOME result=$homeLaunched"
+            )
+            return
+        }
         if (isSyuLauncherPackage(packageName)) {
             val homeLaunched = launchHomeScreen()
             AccEventLog.append(
@@ -430,6 +438,13 @@ class FytForegroundService : Service() {
     private fun isSyuLauncherPackage(packageName: String): Boolean {
         val normalized = packageName.lowercase(Locale.US)
         return normalized.startsWith("com.syu.") && normalized.contains("launcher")
+    }
+
+    private fun isAccOnStartupTargetPackage(packageName: String): Boolean {
+        val normalizedPackage = packageName.trim()
+        if (normalizedPackage.isBlank()) return false
+        return AccOnStartupStore.load(this)
+            .any { target -> target.packageName == normalizedPackage }
     }
 
     private fun clearPendingStartupRunnables() {

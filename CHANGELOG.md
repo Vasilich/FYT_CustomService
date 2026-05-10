@@ -1,5 +1,10 @@
 # Changelog
 
+### 2026-05-10
+- Added previous-foreground restore exception:
+  - if `previousForeground` package is included in ACC ON startup-target list, restore now goes to HOME instead of relaunching that app.
+- Bumped Android `versionCode` to `4` (kept `versionName` as `1.0.0`).
+
 ### 2026-05-06 (update 2)
 - Release signing now reads `RELEASE_*` values from Gradle properties/environment variables.
 - Project uses local `.gradle-user-home/gradle.properties` for signing secrets (gitignored).

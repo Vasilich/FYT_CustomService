@@ -104,6 +104,7 @@ ACCON flow:
 8. Execute configured ACCON startup targets in order (with per-target pauses).
 9. Restore previous foreground app.
    - If foreground detection is unavailable, fall back to launching HOME screen.
+   - If previous foreground package is present in ACC ON startup-target list, use HOME intent instead of restoring that app.
    - If previous foreground package matches `com.syu.*launcher*`, use HOME intent instead of package relaunch.
    - Delayed restore retries are conditional: each retry is skipped if the target app is already foreground.
    - Delayed restore retries are tracked and canceled if a new ACCON/ACCOFF/reset flow arrives.
@@ -204,6 +205,8 @@ Logged details include:
 - Previous foreground restore attempt/result and delayed restore retry results.
 - Conditional retry skip entry:
   - `ACCON restore retry skipped ... reason=already_foreground`
+- Startup-target restore exception entry:
+  - `ACCON restore previousForeground=... matches_startup_target; launched HOME result=...`
 - SYU launcher restore fallback entry:
   - `ACCON restore detected SYU launcher package=...; using HOME intent result=...`
 - Cancellation of pending ACCON delayed work when a newer ACCON, ACCOFF, or reset supersedes it.

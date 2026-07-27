@@ -190,6 +190,13 @@ Log file location:
 Each line starts with timestamp format:
 - `yyyy-MM-dd HH:mm:ss.zzz` (3-digit milliseconds, for example `2026-04-28 14:37:05.042`)
 
+On settings screen open, the app checks required Android accesses and guides setup when missing:
+- Android notification permission on Android 13+.
+- Notification Listener access.
+- Usage Access for `PACKAGE_USAGE_STATS`.
+  - Usage Access is a special Android access and cannot be granted programmatically.
+  - The setup action tries to open Usage Access directly for this app, then falls back to the general Usage Access list.
+
 Logged details include:
 - Service creation/start reason on first `onStartCommand`:
   - `SERVICE start reason action=... source=... flags=... startId=...`
@@ -201,7 +208,7 @@ Logged details include:
 - ACCON PLAY sent to saved player.
 - Media command dispatch path (`transport` or `media_button+audio_manager`).
 - Startup target actions per item: launched or skipped with reason (for example `already_running`).
-  - Includes running-check source details (`running_app_processes`, `foreground_usage_event`, `recent_foreground_without_background`, `not_detected`).
+  - Includes running-check source details (`running_app_processes`, `foreground_usage_event`, `recent_foreground_without_background`, `missing_usage_access`, `not_detected`).
 - Previous foreground restore attempt/result and delayed restore retry results.
 - Conditional retry skip entry:
   - `ACCON restore retry skipped ... reason=already_foreground`

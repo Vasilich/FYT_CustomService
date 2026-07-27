@@ -2,8 +2,6 @@ package dev.igor.fytcustomservice
 
 import android.Manifest
 import android.app.AlertDialog
-import android.app.AppOpsManager
-import android.content.ComponentName
 import android.content.Intent
 import android.graphics.drawable.Drawable
 import android.net.Uri
@@ -37,10 +35,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lastStartedPlayerText: TextView
     private lateinit var lastActiveAppBeforeTargetsText: TextView
     private var requiredAccessDialog: AlertDialog? = null
+    private var notificationPermissionRequestInFlight = false
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* no-op */ }
+    ) {
+        notificationPermissionRequestInFlight = false
+        promptRequiredAccessesIfNeeded()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -114,17 +116,19 @@ class MainActivity : AppCompatActivity() {
             scheduleAccUiRefresh()
         }
 
-        requestNotificationPermissionIfNeeded()
         AccEventLog.append(this, "MAIN_ACTIVITY started; log write health check")
         refreshServiceStatusText()
         refreshAccEventTimestamps()
+        checkAndRequestRequiredAccessesOnSettingsStart()
     }
 
     override fun onResume() {
         super.onResume()
         refreshServiceStatusText()
         refreshAccEventTimestamps()
-        promptRequiredAccessesIfNeeded()
+        if (!notificationPermissionRequestInFlight) {
+            promptRequiredAccessesIfNeeded()
+        }
     }
 
     private fun showSettingsDialog() {
@@ -453,18 +457,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun ensureRequiredAccessesForConfiguration(): Boolean {
-        requestNotificationPermissionIfNeeded()
+        if (requestNotificationPermissionIfNeeded()) {
+            return false
+        }
         return promptRequiredAccessesIfNeeded()
     }
 
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    private fun checkAndRequestRequiredAccessesOnSettingsStart() {
+        if (!requestNotificationPermissionIfNeeded()) {
+            promptRequiredAccessesIfNeeded()
+        }
+    }
+
+    private fun requestNotificationPermissionIfNeeded(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
-            return
+            return false
         }
+        notificationPermissionRequestInFlight = true
         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        return true
     }
 
     private fun promptRequiredAccessesIfNeeded(): Boolean {
@@ -521,8 +535,25 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (!hasUsageAccess()) {
-            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+            openUsageAccessSettings()
         }
+    }
+
+    private fun openUsageAccessSettings() {
+        val appUsageAccessIntent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
+            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        }
+
+        if (appUsageAccessIntent.resolveActivity(packageManager) != null) {
+            val opened = runCatching {
+                startActivity(appUsageAccessIntent)
+                true
+            }.getOrDefault(false)
+            if (opened) return
+        }
+
+        startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
     }
 
     private fun openAppInfoSettings() {
@@ -533,24 +564,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hasNotificationListenerAccess(): Boolean {
-        val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
-            ?: return false
-        return enabled.split(':').any { flattened ->
-            val component = ComponentName.unflattenFromString(flattened)
-            component != null &&
-                component.packageName == packageName &&
-                component.className == FytNotificationListenerService::class.java.name
-        }
+        return RequiredAccess.hasNotificationListenerAccess(this)
     }
 
     private fun hasUsageAccess(): Boolean {
-        val appOps = getSystemService(AppOpsManager::class.java)
-        val mode = appOps.unsafeCheckOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS,
-            android.os.Process.myUid(),
-            packageName
-        )
-        return mode == AppOpsManager.MODE_ALLOWED
+        return RequiredAccess.hasUsageAccess(this)
     }
 
     private fun toast(message: String) {

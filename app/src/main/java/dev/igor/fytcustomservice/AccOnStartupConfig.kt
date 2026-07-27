@@ -160,6 +160,13 @@ object StartupTargetLauncher {
             )
         }
 
+        if (!RequiredAccess.hasUsageAccess(context)) {
+            return RunningCheckResult(
+                isRunning = false,
+                source = "missing_usage_access"
+            )
+        }
+
         val foregroundNow = ForegroundAppHelper.getForegroundPackage(
             context = context,
             excludePackage = null

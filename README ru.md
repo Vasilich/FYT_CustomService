@@ -139,7 +139,14 @@ adb shell am broadcast \
 
 Также в системных настройках для полной ACC-логики нужны:
 - Notification access для `FYT custom service` (для надёжного чтения активных media sessions).
-- Usage access для `FYT custom service` (для определения/восстановления foreground-приложения).
+- Usage access для `FYT custom service` (для определения/восстановления foreground-приложения и проверки уже запущенных ACCON startup targets).
+
+При открытии экрана настроек приложение проверяет нужные доступы и предлагает настройку, если чего-то не хватает:
+- runtime-разрешение на уведомления на Android 13+;
+- Notification Listener access;
+- Usage Access для `PACKAGE_USAGE_STATS`.
+
+`PACKAGE_USAGE_STATS` нельзя выдать программно как обычное runtime-разрешение. Кнопка настройки сначала пытается открыть Usage Access сразу для этого приложения, а если прошивка не поддерживает такой экран, открывает общий список Usage Access.
 
 Также может потребоваться на уровне прошивки устройства:
 - Vendor-specific whitelist для автозапуска.
@@ -159,9 +166,15 @@ adb shell am broadcast \
 - Лог обнаруженного foreground-приложения перед запуском startup targets.
 - Отправка PLAY в сохранённый плеер.
 - Действия по каждой цели автозапуска: запущена или пропущена с причиной (например, `already_running`).
+  - Источник проверки уже запущенного приложения может быть `running_app_processes`, `foreground_usage_event`, `recent_foreground_without_background`, `missing_usage_access` или `not_detected`.
 - Попытка/результат восстановления предыдущего foreground-приложения.
 
 ## Changelog
+### 2026-07-28
+- Экран настроек теперь сразу запускает проверку требуемых доступов и ведёт пользователя к нужным системным экранам.
+- Для Usage Access сначала используется app-specific intent, затем fallback на общий список Usage Access.
+- В ACCON startup-target проверке добавлен источник `missing_usage_access`, чтобы в логах было видно отсутствие Usage Access.
+
 ### 2026-04-25
 - Уменьшен размер release APK за счёт включения R8 minification и Android resource shrinking для `release` builds.
 - Пакуемые ресурсы ограничены английским языком через `resourceConfigurations`.

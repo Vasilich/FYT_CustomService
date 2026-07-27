@@ -1,5 +1,12 @@
 # Changelog
 
+### 2026-07-28
+- Settings screen now starts required access setup immediately on open:
+  - requests Android notification permission when needed,
+  - prompts for Notification Listener and Usage Access special permissions.
+- Usage Access setup now first tries to open the app-specific Usage Access settings screen, then falls back to the general Usage Access list when unsupported by the device.
+- ACCON startup-target "already running" detection now reports `missing_usage_access` when Usage Access is not granted, instead of falling through as `not_detected`.
+
 ### 2026-05-10
 - Added previous-foreground restore exception:
   - if `previousForeground` package is included in ACC ON startup-target list, restore now goes to HOME instead of relaunching that app.
@@ -51,6 +58,7 @@
   - `running_app_processes`
   - `foreground_usage_event`
   - `recent_foreground_without_background`
+  - `missing_usage_access`
   - `not_detected`
 - Re-added runtime ACC receiver inside foreground service to improve ACCON/ACCOFF capture reliability while service is running.
 - Kept static manifest receiver as cold-start path; both receiver paths now log receive source.
